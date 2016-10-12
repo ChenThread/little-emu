@@ -89,12 +89,10 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return 0xFF;
 
 		case 2: // V counter
-			// TODO!
-			return 0xFF;
+			return (uint8_t)((timestamp/(684ULL))%313ULL);
 
 		case 3: // H counter
-			// TODO!
-			return 0xFF;
+			return (uint8_t)(((timestamp%(684ULL))-94)>>2);
 
 		case 4: // VDP data
 			// TODO!
@@ -1562,7 +1560,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				uint8_t diff = 0;
 				if(c != 0) {
 					diff |= 0x60;
-					if(h != 0 && ah >= 0xA) {
+					if(h != 0 || al >= 0xA) {
 						diff |= 0x06;
 					}
 				} else if(al >= 0xA) {
@@ -1598,15 +1596,16 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				// Calc flags
 				nf |= (a&0xA8);
 				nf |= z80_parity(a);
+				nf |= (a == 0 ? 0x40 : 0x00);
 				z80->gpr[RF] = nf;
 				z80->gpr[RA] = a;
 			} break;
 
 			case 0x2F: // CPL
+				z80->gpr[RA] ^= 0xFF;
 				z80->gpr[RF] = (z80->gpr[RF]&0xC5)
 					| (z80->gpr[RA]&0x28)
 					| 0x12;
-				z80->gpr[RA] ^= 0xFF;
 				break;
 
 			case 0x37: // SCF
@@ -1615,7 +1614,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					| 0x01;
 				break;
 			case 0x3F: // CCF
-				z80->gpr[RF] = ((z80->gpr[RF]&0xC4)
+				z80->gpr[RF] = ((z80->gpr[RF]&0xC5)
 					| ((z80->gpr[RF]&0x01)<<4)
 					| (z80->gpr[RA]&0x28)) ^ 0x01;
 				break;
