@@ -30,7 +30,7 @@ struct Z80
 	uint8_t gpr[8];
 	uint8_t shadow[8];
 	uint8_t idx[2][2];
-	uint8_t wz[4]; // internal register; required for some flag bit 3/5 stuff
+	uint8_t wz[4]; // internal register + shadow; required for some flag bit 3/5 stuff
 	uint8_t i,r,iff1,iff2;
 	uint16_t sp;
 	uint16_t pc;
