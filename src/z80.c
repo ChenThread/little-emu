@@ -288,7 +288,7 @@ static uint16_t z80_adc16(struct Z80 *z80, uint16_t a, uint16_t b)
 {
 	uint16_t rc = (uint16_t)(z80->gpr[RF]&0x01);
 	uint16_t r = a+b+rc;
-	uint8_t h = (((a&0xFFF)+(b&0xFFF))&0x1000)>>8;
+	uint8_t h = (((a&0xFFF)+(b&0xFFF)+rc)&0x1000)>>8;
 	uint8_t c = (r < a || (rc == 1 && r == a) ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
 	// Sa == Sb && Sa != Sr
@@ -301,7 +301,7 @@ static uint16_t z80_sbc16(struct Z80 *z80, uint16_t a, uint16_t b)
 {
 	uint16_t rc = (uint16_t)(z80->gpr[RF]&0x01);
 	uint16_t r = a-b-rc;
-	uint8_t h = (((a&0xFFF)-(b&0xFFF))&0x1000)>>8;
+	uint8_t h = (((a&0xFFF)-(b&0xFFF)-rc)&0x1000)>>8;
 	uint8_t c = (r > a || (rc == 1 && r == a) ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
 	// Sa != Sb && Sa != Sr
