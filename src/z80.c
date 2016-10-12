@@ -450,7 +450,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0xA0: { // LDI
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RD]);
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
-					//printf("%04X -> %04X, %04X\n", dr, sr, z80_pair_pbe(&z80->gpr[RB]));
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					z80_mem_write(sms, z80->timestamp, dr, dat);
@@ -466,12 +465,11 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
 						break;
 					}
-					z80->gpr[RF] |= 0x02;
+					z80->gpr[RF] |= 0x04;
 				} break;
 				case 0xB0: { // LDIR
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RD]);
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
-					//printf("%04X -> %04X, %04X\n", dr, sr, z80_pair_pbe(&z80->gpr[RB]));
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					z80_mem_write(sms, z80->timestamp, dr, dat);
@@ -487,7 +485,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
 						break;
 					}
-					z80->gpr[RF] |= 0x02;
+					z80->gpr[RF] |= 0x04;
 					z80->pc -= 2;
 					Z80_ADD_CYCLES(z80, 5);
 				} break;
@@ -495,7 +493,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0xA8: { // LDD
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RD]);
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
-					//printf("%04X -> %04X, %04X\n", dr, sr, z80_pair_pbe(&z80->gpr[RB]));
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					z80_mem_write(sms, z80->timestamp, dr, dat);
@@ -511,12 +508,11 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
 						break;
 					}
-					z80->gpr[RF] |= 0x02;
+					z80->gpr[RF] |= 0x04;
 				} break;
 				case 0xB8: { // LDDR
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RD]);
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
-					//printf("%04X -> %04X, %04X\n", dr, sr, z80_pair_pbe(&z80->gpr[RB]));
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					z80_mem_write(sms, z80->timestamp, dr, dat);
@@ -532,7 +528,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
 						break;
 					}
-					z80->gpr[RF] |= 0x02;
+					z80->gpr[RF] |= 0x04;
 					z80->pc -= 2;
 					Z80_ADD_CYCLES(z80, 5);
 				} break;
