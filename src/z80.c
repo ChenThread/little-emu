@@ -844,6 +844,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 			// ALU
 			switch(op&~7) {
+				//
+				// X=0
+				//
 				case 0x00: // RLC
 					z80->gpr[RF] = ((val>>7)&0x01);
 					val = ((val<<1)|((z80->gpr[RA]>>7)&1));
@@ -897,6 +900,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RF] |= (val == 0 ? 0x40 : 0x00);
 					break;
 
+				//
+				// X=1
+				//
 				case 0x40: { // BIT 0, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x01);
@@ -946,6 +952,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 
+				//
+				// X=2
+				//
 				case 0x80: val &= ~0x01; break; // RES 0, r
 				case 0x88: val &= ~0x02; break; // RES 1, r
 				case 0x90: val &= ~0x04; break; // RES 2, r
@@ -955,6 +964,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0xB0: val &= ~0x40; break; // RES 6, r
 				case 0xB8: val &= ~0x80; break; // RES 7, r
 
+				//
+				// X=3
+				//
 				case 0xC0: val |= 0x01; break; // SET 0, r
 				case 0xC8: val |= 0x02; break; // SET 1, r
 				case 0xD0: val |= 0x04; break; // SET 2, r
