@@ -74,6 +74,7 @@ struct SMS
 };
 
 extern uint8_t sms_rom[512*1024];
+extern bool sms_rom_is_banked;
 
 // sms.c
 uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port);
