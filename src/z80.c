@@ -193,7 +193,8 @@ static uint8_t z80_add8(struct Z80 *z80, uint8_t a, uint8_t b)
 	uint8_t h = ((a&0xF)+(b&0xF))&0x10;
 	uint8_t c = (r < a ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
-	uint8_t v = 0; // TODO!
+	// Sa == Sb && Sa != Sr
+	uint8_t v = (((a^b)&0x80) == 0 && ((a^r)&0x80) != 0) ? 0x04 : 0x00;
 	z80->gpr[RF] = (r&0xA8) | h | c | v | z;
 	return r;
 }
@@ -217,7 +218,8 @@ static uint8_t z80_sub8(struct Z80 *z80, uint8_t a, uint8_t b)
 	uint8_t h = ((a&0xF)-(b&0xF))&0x10;
 	uint8_t c = (r > a ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
-	uint8_t v = 0; // TODO!
+	// Sa != Sb && Sa != Sr
+	uint8_t v = (((a^b)&0x80) != 0 && ((a^r)&0x80) != 0) ? 0x04 : 0x00;
 	z80->gpr[RF] = (r&0xA8) | h | c | v | z | 0x02;
 	return r;
 }
@@ -279,7 +281,8 @@ static uint16_t z80_adc16(struct Z80 *z80, uint16_t a, uint16_t b)
 	uint8_t h = (((a&0xFFF)+(b&0xFFF))&0x1000)>>8;
 	uint8_t c = (r < a || (rc == 1 && r == a) ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
-	uint8_t v = 0; // TODO!
+	// Sa == Sb && Sa != Sr
+	uint8_t v = (((a^b)&0x8000) == 0 && ((a^r)&0x8000) != 0) ? 0x04 : 0x00;
 	z80->gpr[RF] = ((r>>8)&0xA8) | h | c | v | z;
 	return r;
 }
@@ -291,7 +294,8 @@ static uint16_t z80_sbc16(struct Z80 *z80, uint16_t a, uint16_t b)
 	uint8_t h = (((a&0xFFF)-(b&0xFFF))&0x1000)>>8;
 	uint8_t c = (r > a || (rc == 1 && r == a) ? 0x01 : 0x00);
 	uint8_t z = (r == 0 ? 0x40 : 0x00);
-	uint8_t v = 0; // TODO!
+	// Sa != Sb && Sa != Sr
+	uint8_t v = (((a^b)&0x8000) != 0 && ((a^r)&0x8000) != 0) ? 0x04 : 0x00;
 	z80->gpr[RF] = ((r>>8)&0xA8) | h | c | v | z | 0x02;
 	return r;
 }
@@ -812,7 +816,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 			if(ix >= 0) {
 				uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-				addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+				addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 				Z80_ADD_CYCLES(z80, 1);
 				val = z80_mem_read(sms, z80->timestamp, addr);
 				Z80_ADD_CYCLES(z80, 4);
@@ -971,6 +975,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80->gpr[oz] = val;
 			}
 
+			// Write to (Iz+d) if we use DD/FD
 			if(ix >= 0) {
 				uint16_t addr = z80_pair_pbe(&z80->wz[0]);
 				z80_mem_write(sms, z80->timestamp,
@@ -1000,7 +1005,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			} else if(oz == 6) {
 				if(ix >= 0) {
 					uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-					addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+					addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 					Z80_ADD_CYCLES(z80, 5);
 					val = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
@@ -1021,7 +1026,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			} else if(oy == 6) {
 				if(ix >= 0) {
 					uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-					addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+					addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 					Z80_ADD_CYCLES(z80, 5);
 					z80_mem_write(sms, z80->timestamp,
 						addr,
@@ -1055,7 +1060,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			} else if(oz == 6) {
 				if(ix >= 0) {
 					uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-					addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+					addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 					Z80_ADD_CYCLES(z80, 5);
 					val = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
@@ -1378,7 +1383,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			case 0x34: if(ix >= 0) {
 					// INC (Iz+d)
 					uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-					addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+					addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 					Z80_ADD_CYCLES(z80, 5);
 					uint8_t val = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
@@ -1428,7 +1433,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			case 0x35: if(ix >= 0) {
 					// DEC (Iz+d)
 					uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-					addr += (uint16_t)(uint8_t)(int8_t)z80_fetch_op_x(z80, sms);
+					addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
 					Z80_ADD_CYCLES(z80, 5);
 					uint8_t val = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
@@ -1523,6 +1528,77 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80->gpr[RA] = ((c<<7)|((z80->gpr[RA]>>1)&0x7F));
 				z80->gpr[RF] |= (z80->gpr[RA]&0x28);
 			} break;
+
+			case 0x27: { // DAA
+				// HALP
+				uint8_t a = z80->gpr[RA];
+				uint8_t ah = a>>4;
+				uint8_t al = a&15;
+				uint8_t c = z80->gpr[RF]&0x01;
+				uint8_t n = z80->gpr[RF]&0x02;
+				uint8_t h = z80->gpr[RF]&0x10;
+				uint8_t nf = c | n;
+
+				// Get diff + C'
+				uint8_t diff = 0;
+				if(c != 0) {
+					diff |= 0x60;
+					if(h != 0 && ah >= 0xA) {
+						diff |= 0x06;
+					}
+				} else if(al >= 0xA) {
+					diff |= 0x06;
+					if(ah >= 0x9) {
+						diff |= 0x60;
+						nf |= 0x01;
+					}
+				} else {
+					if(h != 0) {
+						diff |= 0x06;
+					}
+					if(ah >= 0xA) {
+						diff |= 0x60;
+						nf |= 0x01;
+					}
+				}
+
+				// Get H'
+				if(n == 0) {
+					if(al >= 0xA) {
+						nf |= 0x10;
+					}
+
+				} else {
+					if(h != 0 && al <= 0x5) {
+						nf |= 0x10;
+					}
+				}
+
+				// Calc result
+				a += diff;
+				nf |= (a&0xA8);
+				nf |= z80_parity(a);
+				z80->gpr[RF] = nf;
+				z80->gpr[RA] = a;
+			} break;
+
+			case 0x2F: // CPL
+				z80->gpr[RF] = (z80->gpr[RF]&0xC5)
+					| (z80->gpr[RA]&0x28)
+					| 0x12;
+				z80->gpr[RA] ^= 0xFF;
+				break;
+
+			case 0x37: // SCF
+				z80->gpr[RF] = (z80->gpr[RF]&0xC4)
+					| (z80->gpr[RA]&0x28)
+					| 0x01;
+				break;
+			case 0x3F: // CCF
+				z80->gpr[RF] = ((z80->gpr[RF]&0xC4)
+					| ((z80->gpr[RF]&0x01)<<4)
+					| (z80->gpr[RA]&0x28)) ^ 0x01;
+				break;
 
 			//
 			// X=3
