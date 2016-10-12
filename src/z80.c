@@ -533,6 +533,96 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 5);
 				} break;
 
+				case 0xA1: { // CPI
+					// TODO: F --3-1---
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 3);
+					uint8_t c = z80->gpr[RF];
+					z80_sub8(z80, z80->gpr[RA], dat);
+					Z80_ADD_CYCLES(z80, 3+2);
+					z80->gpr[RF] = (z80->gpr[RF]&0xFE)
+						| 0x02
+						| c;
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					if((z80->gpr[RC]--) == 0) {
+						z80->gpr[RB]--;
+					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
+						break;
+					}
+					z80->gpr[RF] |= 0x04;
+				} break;
+				case 0xB1: { // CPIR
+					// TODO: F --3-1---
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 3);
+					uint8_t c = z80->gpr[RF];
+					z80_sub8(z80, z80->gpr[RA], dat);
+					Z80_ADD_CYCLES(z80, 3+2);
+					z80->gpr[RF] = (z80->gpr[RF]&0xFE)
+						| 0x02
+						| c;
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					if((z80->gpr[RC]--) == 0) {
+						z80->gpr[RB]--;
+					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
+						break;
+					}
+					z80->gpr[RF] |= 0x04;
+					if(z80->gpr[RA] != dat) {
+						z80->pc -= 2;
+						Z80_ADD_CYCLES(z80, 5);
+					}
+				} break;
+
+				case 0xA9: { // CPD
+					// TODO: F --3-1---
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 3);
+					uint8_t c = z80->gpr[RF];
+					z80_sub8(z80, z80->gpr[RA], dat);
+					Z80_ADD_CYCLES(z80, 3+2);
+					z80->gpr[RF] = (z80->gpr[RF]&0xFE)
+						| 0x02
+						| c;
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					if((z80->gpr[RC]--) == 0) {
+						z80->gpr[RB]--;
+					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
+						break;
+					}
+					z80->gpr[RF] |= 0x04;
+				} break;
+				case 0xB9: { // CPDR
+					// TODO: F --3-1---
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 3);
+					uint8_t c = z80->gpr[RF];
+					z80_sub8(z80, z80->gpr[RA], dat);
+					Z80_ADD_CYCLES(z80, 3+2);
+					z80->gpr[RF] = (z80->gpr[RF]&0xFE)
+						| 0x02
+						| c;
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					if((z80->gpr[RC]--) == 0) {
+						z80->gpr[RB]--;
+					} else if(z80->gpr[RC] == 0 && z80->gpr[RB] == 0) {
+						break;
+					}
+					z80->gpr[RF] |= 0x04;
+					if(z80->gpr[RA] != dat) {
+						z80->pc -= 2;
+						Z80_ADD_CYCLES(z80, 5);
+					}
+				} break;
+
 				default:
 					// TODO!
 					fprintf(stderr, "OP: ED %02X\n", op);
@@ -542,7 +632,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 		}
 
 		if(op == 0xCB) {
-			int oy = (op>>3)&7;
+			//int oy = (op>>3)&7;
 			int oz = op&7;
 			int ox = (op>>6);
 
@@ -680,23 +770,23 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RF] |= sf;
 				} break;
 
-				case 0x80: val |= 0x01; break; // SET 0, r
-				case 0x88: val |= 0x02; break; // SET 1, r
-				case 0x90: val |= 0x04; break; // SET 2, r
-				case 0x98: val |= 0x08; break; // SET 3, r
-				case 0xA0: val |= 0x10; break; // SET 4, r
-				case 0xA8: val |= 0x20; break; // SET 5, r
-				case 0xB0: val |= 0x40; break; // SET 6, r
-				case 0xB8: val |= 0x80; break; // SET 7, r
+				case 0x80: val &= ~0x01; break; // RES 0, r
+				case 0x88: val &= ~0x02; break; // RES 1, r
+				case 0x90: val &= ~0x04; break; // RES 2, r
+				case 0x98: val &= ~0x08; break; // RES 3, r
+				case 0xA0: val &= ~0x10; break; // RES 4, r
+				case 0xA8: val &= ~0x20; break; // RES 5, r
+				case 0xB0: val &= ~0x40; break; // RES 6, r
+				case 0xB8: val &= ~0x80; break; // RES 7, r
 
-				case 0xC0: val &= ~0x01; break; // RES 0, r
-				case 0xC8: val &= ~0x02; break; // RES 1, r
-				case 0xD0: val &= ~0x04; break; // RES 2, r
-				case 0xD8: val &= ~0x08; break; // RES 3, r
-				case 0xE0: val &= ~0x10; break; // RES 4, r
-				case 0xE8: val &= ~0x20; break; // RES 5, r
-				case 0xF0: val &= ~0x40; break; // RES 6, r
-				case 0xF8: val &= ~0x80; break; // RES 7, r
+				case 0xC0: val |= 0x01; break; // SET 0, r
+				case 0xC8: val |= 0x02; break; // SET 1, r
+				case 0xD0: val |= 0x04; break; // SET 2, r
+				case 0xD8: val |= 0x08; break; // SET 3, r
+				case 0xE0: val |= 0x10; break; // SET 4, r
+				case 0xE8: val |= 0x20; break; // SET 5, r
+				case 0xF0: val |= 0x40; break; // SET 6, r
+				case 0xF8: val |= 0x80; break; // SET 7, r
 
 				default:
 					// TODO!
@@ -1258,6 +1348,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80->gpr[RA] = ((z80->gpr[RA]<<7)|((z80->gpr[RA]>>1)&0x7F));
 				z80->gpr[RF] |= (z80->gpr[RA]&0x28);
 				break;
+			case 0x17: { // RLA
+				uint8_t c = z80->gpr[RF]&0x01;
+				z80->gpr[RF] = ((z80->gpr[RA]>>7)&0x01);
+				z80->gpr[RA] = (z80->gpr[RA]<<1)|c;
+				z80->gpr[RF] |= (z80->gpr[RA]&0xA8) | z80_parity(z80->gpr[RA]);
+			} break;
+			case 0x1F: { // RRA
+				uint8_t c = z80->gpr[RF]&0x01;
+				z80->gpr[RF] = (z80->gpr[RA]&0x01);
+				z80->gpr[RA] = ((c<<7)|((z80->gpr[RA]>>1)&0x7F));
+				z80->gpr[RF] |= (z80->gpr[RA]&0xA8) | z80_parity(z80->gpr[RA]);
+			} break;
 
 			//
 			// X=3
