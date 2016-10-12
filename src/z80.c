@@ -804,6 +804,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			}
 
 			uint8_t val;
+			uint8_t bval;
 
 			// Read Iz if necessary
 			// FIXME: timing sucks here
@@ -826,16 +827,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 			// Read if we haven't read Iz
 			if(ix >= 0) {
-				// Do nothing
+				// Do nothing to val
+				// But set bval to something suitable
+				bval = z80->wz[0];
+
 			} else if(oz == 6) {
-				if(ix < 0) {
-					val = z80_mem_read(sms, z80->timestamp,
-						z80_pair_pbe(&z80->gpr[RH]));
-					Z80_ADD_CYCLES(z80, 4);
-				}
+				bval = z80->wz[0];
+				val = z80_mem_read(sms, z80->timestamp,
+					z80_pair_pbe(&z80->gpr[RH]));
+				Z80_ADD_CYCLES(z80, 4);
 
 			} else {
-				val = z80->gpr[oz];
+				bval = val = z80->gpr[oz];
 			}
 
 
@@ -897,50 +900,50 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0x40: { // BIT 0, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x01);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x48: { // BIT 1, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x02);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x50: { // BIT 2, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x04);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x58: { // BIT 3, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x08);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x60: { // BIT 4, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x10);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x68: { // BIT 5, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x20);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x70: { // BIT 6, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x40);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 				case 0x78: { // BIT 7, r
 					uint8_t sf = z80->gpr[RF]&0x01;
 					z80_and8(z80, val, 0x80);
-					z80->gpr[RF] &= ~0x01;
-					z80->gpr[RF] |= sf;
+					z80->gpr[RF] &= ~0x29;
+					z80->gpr[RF] |= sf | (bval&0x28);
 				} break;
 
 				case 0x80: val &= ~0x01; break; // RES 0, r
