@@ -576,10 +576,11 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint16_t val = 0xFF&(uint16_t)z80_mem_read(sms,
 						z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
-					val = (val>>4)|((val<<8)&0x0F00);
+					uint8_t na = (val&0x0F);
+					val = (val>>4);
 					val |= ((z80->gpr[RA]<<4)&0xF0);
 					z80->gpr[RA] &= 0xF0;
-					z80->gpr[RA] |= (val>>8)&0x0F;
+					z80->gpr[RA] |= na;
 					Z80_ADD_CYCLES(z80, 4);
 					z80_mem_write(sms, z80->timestamp, addr, (uint8_t)(val));
 					Z80_ADD_CYCLES(z80, 3);
@@ -593,7 +594,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint16_t val = 0xFF&(uint16_t)z80_mem_read(sms,
 						z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
-					val = (val<<8);
+					val = (val<<4);
 					val |= ((z80->gpr[RA])&0x0F);
 					z80->gpr[RA] &= 0xF0;
 					z80->gpr[RA] |= (val>>8)&0x0F;
