@@ -796,10 +796,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 		}
 
 		if(op == 0xCB) {
-			//int oy = (op>>3)&7;
-			int oz = op&7;
-			int ox = (op>>6);
-
 			if(false && ix >= 0) {
 				// TODO!
 				fprintf(stderr, "OP: %02X CB %02X\n", (ix<<5)|0xDD, op);
@@ -809,11 +805,28 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 			uint8_t val;
 
-			// Read
+			// Read Iz if necessary
 			// FIXME: timing sucks here
-			if((oz&~1)==4 && ix >= 0) {
-				val = z80->idx[ix&1][oz&1];
+			if(ix >= 0) {
+				uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
+				addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
+				z80->wz[0] = (uint8_t)(addr>>8);
+				z80->wz[1] = (uint8_t)(addr>>0);
+				Z80_ADD_CYCLES(z80, 1);
+				val = z80_mem_read(sms, z80->timestamp, addr);
+				Z80_ADD_CYCLES(z80, 4);
+			}
 
+			// Fetch
+			op = z80_fetch_op_m1(z80, sms);
+			//printf("*CB %04X %2d %02X %04X\n", z80->pc, ix, op, z80->sp);
+			//int oy = (op>>3)&7;
+			int oz = op&7;
+			int ox = (op>>6);
+
+			// Read if we haven't read Iz
+			if(ix >= 0) {
+				// Do nothing
 			} else if(oz == 6) {
 				if(ix < 0) {
 					val = z80_mem_read(sms, z80->timestamp,
@@ -825,19 +838,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				val = z80->gpr[oz];
 			}
 
-			if(ix >= 0) {
-				uint16_t addr = z80_pair_pbe(z80->idx[ix&1]);
-				addr += (uint16_t)(int16_t)(int8_t)z80_fetch_op_x(z80, sms);
-				z80->wz[0] = (uint8_t)(addr>>8);
-				Z80_ADD_CYCLES(z80, 1);
-				val = z80_mem_read(sms, z80->timestamp, addr);
-				Z80_ADD_CYCLES(z80, 4);
-				z80->wz[0] = (uint8_t)(addr>>8);
-				z80->wz[1] = (uint8_t)(addr>>0);
-			} 
-
-			op = z80_fetch_op_m1(z80, sms);
-			//printf("*CB %04X %2d %02X %04X\n", z80->pc, ix, op, z80->sp);
 
 			// ALU
 			switch(op&~7) {
@@ -971,9 +971,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			// Write
 			if(ox == 1) {
 				// BIT - Do nothing here
-
-			} else if((oz&~1)==4 && ix >= 0) {
-				z80->idx[ix&1][oz&1] = val;
 
 			} else if(oz == 6) {
 				if(ix < 0) {
