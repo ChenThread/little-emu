@@ -1350,15 +1350,17 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				break;
 			case 0x17: { // RLA
 				uint8_t c = z80->gpr[RF]&0x01;
-				z80->gpr[RF] = ((z80->gpr[RA]>>7)&0x01);
+				z80->gpr[RF] = (z80->gpr[RF]&0xC4)
+					 |((z80->gpr[RA]>>7)&0x01);
 				z80->gpr[RA] = (z80->gpr[RA]<<1)|c;
-				z80->gpr[RF] |= (z80->gpr[RA]&0xA8) | z80_parity(z80->gpr[RA]);
+				z80->gpr[RF] |= (z80->gpr[RA]&0x28);
 			} break;
 			case 0x1F: { // RRA
 				uint8_t c = z80->gpr[RF]&0x01;
-				z80->gpr[RF] = (z80->gpr[RA]&0x01);
+				z80->gpr[RF] = (z80->gpr[RF]&0xC4)
+					| ((z80->gpr[RA])&0x01);
 				z80->gpr[RA] = ((c<<7)|((z80->gpr[RA]>>1)&0x7F));
-				z80->gpr[RF] |= (z80->gpr[RA]&0xA8) | z80_parity(z80->gpr[RA]);
+				z80->gpr[RF] |= (z80->gpr[RA]&0x28);
 			} break;
 
 			//
