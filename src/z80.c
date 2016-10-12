@@ -359,6 +359,15 @@ static void z80_op_call_cond(struct Z80 *z80, struct SMS *sms, bool cond)
 	}
 }
 
+static void z80_op_rst(struct Z80 *z80, struct SMS *sms, uint16_t addr)
+{
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+	Z80_ADD_CYCLES(z80, 4);
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+	Z80_ADD_CYCLES(z80, 3);
+	z80->pc = addr;
+}
+
 void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 {
 	// Don't jump back into the past
@@ -405,6 +414,56 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				//
 				// X=1
 				//
+
+				// Z=1
+				case 0x41: // OUT (C), B
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RB]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x49: // OUT (C), C
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RC]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x51: // OUT (C), D
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RD]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x59: // OUT (C), E
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RE]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x61: // OUT (C), H
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RH]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x69: // OUT (C), L
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RL]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x71: // OUT (C), 0
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						0);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x79: // OUT (C), A
+					z80_io_write(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]),
+						z80->gpr[RA]);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
 
 				// Z=2
 				case 0x42: { // SBC HL, BC
@@ -569,6 +628,21 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0x7E: z80->im = 2; break;
 
 				// Z=7
+				case 0x57: // LD A, I
+					z80->gpr[RA] = z80->i;
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RA]&0xA8)
+						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
+						| (z80->iff2 ? 0x04 : 0x00);
+					break;
+				case 0x5F: // LD A, R
+					z80->gpr[RA] = z80->r;
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RA]&0xA8)
+						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
+						| (z80->iff2 ? 0x04 : 0x00);
+					break;
+
 				case 0x67: { // RRD
 					uint16_t addr = z80_pair_pbe(&z80->gpr[RH]);
 					uint16_t val = 0xFF&(uint16_t)z80_mem_read(sms,
@@ -1138,6 +1212,16 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			// Z=0
 			case 0x00: // NOP
 				break;
+			case 0x08: { // EX AF, AF'
+				uint8_t t;
+				t = z80->gpr[RA]; z80->gpr[RA] = z80->shadow[RA]; z80->shadow[RA] = t;
+				t = z80->gpr[RF]; z80->gpr[RF] = z80->shadow[RF]; z80->shadow[RF] = t;
+			} break;
+			case 0x10: // DJNZ d
+				z80->gpr[RB]--;
+				Z80_ADD_CYCLES(z80, 1);
+				z80_op_jr_cond(z80, sms, z80->gpr[RB] != 0);
+				break;
 			case 0x18: // JR d
 				z80_op_jr_cond(z80, sms, true);
 				break;
@@ -1673,6 +1757,23 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			case 0xC9: // RET
 				z80_op_ret(z80, sms);
 				break;
+			case 0xD9: { // EXX
+				uint8_t t;
+				t = z80->gpr[RB]; z80->gpr[RB] = z80->shadow[RB]; z80->shadow[RB] = t;
+				t = z80->gpr[RC]; z80->gpr[RC] = z80->shadow[RC]; z80->shadow[RC] = t;
+				t = z80->gpr[RD]; z80->gpr[RD] = z80->shadow[RD]; z80->shadow[RD] = t;
+				t = z80->gpr[RE]; z80->gpr[RE] = z80->shadow[RE]; z80->shadow[RE] = t;
+				t = z80->gpr[RH]; z80->gpr[RH] = z80->shadow[RH]; z80->shadow[RH] = t;
+				t = z80->gpr[RL]; z80->gpr[RL] = z80->shadow[RL]; z80->shadow[RL] = t;
+
+				// also cover WZ
+				t = z80->shadow[0];
+				z80->shadow[0] = z80->shadow[2];
+				z80->shadow[2] = t;
+				t = z80->shadow[1];
+				z80->shadow[1] = z80->shadow[3];
+				z80->shadow[3] = t;
+			} break;
 
 			// Z=2
 			case 0xC2: // JP NZ, d
@@ -1813,6 +1914,32 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80_sub8(z80, z80->gpr[RA], val);
 				z80->gpr[RF] = (z80->gpr[RF]&~0x28) | (val&0x28);
 			} break;
+
+			// Z=7: RST
+			case 0xC7: // RST $00
+				z80_op_rst(z80, sms, 0x0000);
+				break;
+			case 0xCF: // RST $08
+				z80_op_rst(z80, sms, 0x0008);
+				break;
+			case 0xD7: // RST $10
+				z80_op_rst(z80, sms, 0x0010);
+				break;
+			case 0xDF: // RST $18
+				z80_op_rst(z80, sms, 0x0018);
+				break;
+			case 0xE7: // RST $20
+				z80_op_rst(z80, sms, 0x0020);
+				break;
+			case 0xEF: // RST $28
+				z80_op_rst(z80, sms, 0x0028);
+				break;
+			case 0xF7: // RST $30
+				z80_op_rst(z80, sms, 0x0030);
+				break;
+			case 0xFF: // RST $38
+				z80_op_rst(z80, sms, 0x0038);
+				break;
 
 			default:
 				// TODO!
