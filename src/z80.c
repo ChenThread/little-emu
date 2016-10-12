@@ -267,9 +267,32 @@ static uint16_t z80_add16(struct Z80 *z80, uint16_t a, uint16_t b)
 	uint16_t r = a+b;
 	uint8_t h = (((a&0xFFF)+(b&0xFFF))&0x1000)>>8;
 	uint8_t c = (r < a ? 0x01 : 0x00);
-	uint8_t v = 0; // TODO!
 	z80->gpr[RF] = (z80->gpr[RF]&0xC4)
-		| ((r>>8)&0x28) | h | c | v;
+		| ((r>>8)&0x28) | h | c;
+	return r;
+}
+
+static uint16_t z80_adc16(struct Z80 *z80, uint16_t a, uint16_t b)
+{
+	uint16_t rc = (uint16_t)(z80->gpr[RF]&0x01);
+	uint16_t r = a+b+rc;
+	uint8_t h = (((a&0xFFF)+(b&0xFFF))&0x1000)>>8;
+	uint8_t c = (r < a || (rc == 1 && r == a) ? 0x01 : 0x00);
+	uint8_t z = (r == 0 ? 0x40 : 0x00);
+	uint8_t v = 0; // TODO!
+	z80->gpr[RF] = ((r>>8)&0xA8) | h | c | v | z;
+	return r;
+}
+
+static uint16_t z80_sbc16(struct Z80 *z80, uint16_t a, uint16_t b)
+{
+	uint16_t rc = (uint16_t)(z80->gpr[RF]&0x01);
+	uint16_t r = a-b-rc;
+	uint8_t h = (((a&0xFFF)-(b&0xFFF))&0x1000)>>8;
+	uint8_t c = (r > a || (rc == 1 && r == a) ? 0x01 : 0x00);
+	uint8_t z = (r == 0 ? 0x40 : 0x00);
+	uint8_t v = 0; // TODO!
+	z80->gpr[RF] = ((r>>8)&0xA8) | h | c | v | z | 0x02;
 	return r;
 }
 
@@ -369,6 +392,73 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				//
 				// X=1
 				//
+
+				// Z=2
+				case 0x42: { // SBC HL, BC
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RB]);
+					hl = z80_sbc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x52: { // SBC HL, DE
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RD]);
+					hl = z80_sbc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x62: { // SBC HL, HL
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RH]);
+					hl = z80_sbc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x72: { // SBC HL, SP
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80->sp;
+					hl = z80_sbc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+
+				case 0x4A: { // ADC HL, BC
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RB]);
+					hl = z80_adc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x5A: { // ADC HL, DE
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RD]);
+					hl = z80_adc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x6A: { // ADC HL, HL
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80_pair_pbe(&z80->gpr[RH]);
+					hl = z80_adc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
+				case 0x7A: { // ADC HL, SP
+					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t q = z80->sp;
+					hl = z80_adc16(z80, hl, q);
+					z80->gpr[RH] = (uint8_t)(hl>>8);
+					z80->gpr[RL] = (uint8_t)(hl>>0);
+					Z80_ADD_CYCLES(z80, 11);
+				} break;
 
 				// Z=3
 				case 0x43: { // LD (nn), BC
