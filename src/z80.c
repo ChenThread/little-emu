@@ -1581,20 +1581,21 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					}
 				}
 
-				// Get H'
+				// Get H' + Calc result
 				if(n == 0) {
 					if(al >= 0xA) {
 						nf |= 0x10;
 					}
+					a += diff;
 
 				} else {
 					if(h != 0 && al <= 0x5) {
 						nf |= 0x10;
 					}
+					a -= diff;
 				}
 
-				// Calc result
-				a += diff;
+				// Calc flags
 				nf |= (a&0xA8);
 				nf |= z80_parity(a);
 				z80->gpr[RF] = nf;
