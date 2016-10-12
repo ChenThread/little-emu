@@ -724,6 +724,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					}
 					z80->gpr[RF] |= 0x04;
 					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
 					Z80_ADD_CYCLES(z80, 5);
 				} break;
 
@@ -767,6 +768,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					}
 					z80->gpr[RF] |= 0x04;
 					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
 					Z80_ADD_CYCLES(z80, 5);
 				} break;
 
@@ -815,6 +817,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RF] |= 0x04;
 					if(z80->gpr[RA] != dat) {
 						z80->pc -= 2;
+						z80->wz[0] = (uint8_t)(z80->pc>>8);
 						Z80_ADD_CYCLES(z80, 5);
 					}
 				} break;
@@ -862,7 +865,36 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RF] |= 0x04;
 					if(z80->gpr[RA] != dat) {
 						z80->pc -= 2;
+						z80->wz[0] = (uint8_t)(z80->pc>>8);
 						Z80_ADD_CYCLES(z80, 5);
+					}
+				} break;
+
+				//
+				// HERE BE DRAGONS
+				// NO REALLY, THE FLAG AFFECTION MAKES LESS THAN NO SENSE
+				//
+
+				case 0xA2: { // INI
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_io_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = (z80->gpr[RC]+1)&0xFF;
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					if(z80->gpr[RB] == 0xFF) {
+						break;
 					}
 				} break;
 
