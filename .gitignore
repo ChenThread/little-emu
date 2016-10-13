@@ -1,0 +1,7 @@
+# ROMs
+*.sms
+
+# VIM
+.*.swp
+.*.swo
+
