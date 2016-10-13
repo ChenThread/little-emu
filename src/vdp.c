@@ -29,6 +29,11 @@ void vdp_init(struct VDP *vdp)
 	vdp->regs[0x09] = 0x00;
 }
 
+void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+{
+	// TODO!
+}
+
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
 	timestamp &= ~1;
@@ -110,7 +115,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					if((sms->vdp.regs[0x00]&0x10) != 0) {
 						// Kill it here
 						z80_irq(&sms->z80, sms, 0xFF);
-						vdp->status |= 0x80;
+						//vdp->status |= 0x80;
 						hend = (47-17)+1;
 						timediff -= (hend-hbeg)*2;
 						//printf("%016lX\n", timediff);
