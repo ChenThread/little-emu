@@ -33,13 +33,21 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	hctr_end >>= 1;
 
 	// Fetch pointers
-	uint8_t *sp_attrs = &sms->vram[(vdp->regs[0x05]&0x7E)<< 7];
+	uint8_t *sp_tab_y = &sms->vram[((vdp->regs[0x05]&0x7E)<< 7)+0x00];
+	uint8_t *sp_tab_p = &sms->vram[((vdp->regs[0x05]&0x7E)<< 7)+0x80];
 	uint8_t *bg_names = &sms->vram[(vdp->regs[0x02]&0x0E)<<10];
 	uint8_t *sp_tiles = &sms->vram[(vdp->regs[0x06]&0x04)<<11];
 	uint8_t *bg_tiles = &sms->vram[0];
 
 	// Draw screen section
 	int vctr = vctr_beg;
+	int smask = ((vdp->regs[0x01]&0x02) != 0 ? 0xFE : 0xFF);
+	int sdethigh = ((vdp->regs[0x01]&0x02) != 0 ? 16 : 8);
+	int sdetwide = 8;
+	int sshift = ((vdp->regs[0x01]&0x01) != 0 ? 1 : 0);
+	int sxoffs = ((vdp->regs[0x00]&0x08) != 0 ? -8 : 0);
+	sdethigh <<= sshift;
+	sdetwide <<= sshift;
 	int lborder = ((vdp->regs[0x00]&0x20) != 0 ? 8 : 0);
 	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
 	int scx = (-vdp->regs[0x08])&0xFF;
@@ -63,6 +71,20 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		} else {
 			int py = (y+scy)%(28*8);
 
+			// Calculate sprites
+			// TODO: delegate this to later state
+			uint8_t stab[8];
+			int stab_len = 0;
+			for(int i = 0; i < 64; i++) {
+				uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
+				if(sy < sdethigh) {
+					stab[stab_len++] = i;
+					if(stab_len >= 8) {
+						break;
+					}
+				}
+			}
+
 			for(int hctr = hbeg; hctr < hend; hctr++) {
 				int x = hctr - 47;
 				if(x >= lborder && x < 256) {
@@ -77,9 +99,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					uint16_t n = nl|(nh<<8);
 					uint16_t tile = n&0x1FF;
 					//tile = ((px>>3)+(py>>3)*32)&0x1FF;
+
+					// Prepare for tile read
 					uint8_t *tp = &bg_tiles[tile*4*8];
 					uint8_t pal = (nh<<1)&0x10;
-					uint8_t prio = (nh>>4)&0xFF;
+					uint8_t prio = (nh>>4)&0x01;
 					uint8_t xflip = ((nh>>1)&1)*7;
 					uint8_t yflip = ((nh>>2)&1)*7;
 					int spx = (px^xflip^7)&7;
@@ -100,8 +124,43 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 						| 0;
 					//v = spx^spy;
 
+					// Get sprite pixels
+					uint8_t s = 0;
+					for(int i = 0; i < stab_len; i++) {
+						int j = stab[i];
+						uint16_t sx = (uint16_t)(x-sp_tab_p[j*2+0]);
+						sx += sxoffs;
+						if(sx < sdetwide) {
+							// Read tile
+							uint16_t sn = (uint16_t)sp_tab_p[j*2+1];
+							sn &= smask;
+							uint16_t sy = (uint16_t)(y-sp_tab_y[j]);
+							uint8_t *sp = &sp_tiles[sn*4*8];
+							sx >>= sshift;
+							sy >>= sshift;
+							sx ^= 7;
+							sy <<= 2;
+							uint8_t s0 = sp[sy+0];
+							uint8_t s1 = sp[sy+1];
+							uint8_t s2 = sp[sy+2];
+							uint8_t s3 = sp[sy+3];
+							s = 0
+								| (((s0>>sx)&1)<<0)
+								| (((s1>>sx)&1)<<1)
+								| (((s2>>sx)&1)<<2)
+								| (((s3>>sx)&1)<<3)
+								| 0;
+
+							if(s != 0) {
+								s |= 0x10;
+								break;
+							}
+						}
+					}
+
 					// Write
-					v = (v == 0 ? 0 : v|pal);
+					v = (v == 0 || (s != 0 && prio == 0) ? s : v|pal);
+					//v |= pal;
 					frame_data[vctr][hctr] = sms->cram[v&0x1F];
 					//frame_data[vctr][hctr] = v&0x1F;
 				} else {
@@ -180,11 +239,12 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val)
 {
 	vdp_run(vdp, sms, timestamp);
+	//if(vdp->ctrl_latch != 0) { printf("VDP DLWR %04X %02X\n", vdp->ctrl_addr, val); }
 	vdp->ctrl_latch = 0;
 	if(vdp->ctrl_addr >= 0xC000) {
 		// CRAM
 		sms->cram[vdp->ctrl_addr&0x001F] = val;
-		printf("CRAM %02X %02X\n", vdp->ctrl_addr&0x1F, val);
+		//printf("CRAM %02X %02X\n", vdp->ctrl_addr&0x1F, val);
 	} else {
 		// VRAM
 		sms->vram[vdp->ctrl_addr&0x3FFF] = val;

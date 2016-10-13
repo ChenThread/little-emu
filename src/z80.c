@@ -31,6 +31,7 @@ static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uint8_t val)
 {
 	int port = ((addr>>5)&6)|(addr&1);
+	//if(((addr>>8)&0xFF) == 0xBE && addr != 0xBEBE) { printf("IO WRITE %04X %d\n", addr, port); }
 
 	switch(port)
 	{
@@ -927,7 +928,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
-					break;
 				} break;
 				case 0xB2: { // INIR
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
@@ -973,7 +973,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
-					break;
 				} break;
 				case 0xBA: { // INDR
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
@@ -1021,7 +1020,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
-					break;
 				} break;
 				case 0xB3: { // OTIR
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
@@ -1048,7 +1046,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->pc -= 2;
 					z80->wz[0] = (uint8_t)(z80->pc>>8);
 					Z80_ADD_CYCLES(z80, 5);
-					break;
 				} break;
 
 				case 0xAB: { // OUTD
@@ -1069,7 +1066,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
-					break;
 				} break;
 				case 0xBB: { // OTDR
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
@@ -1095,7 +1091,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->pc -= 2;
 					z80->wz[0] = (uint8_t)(z80->pc>>8);
 					Z80_ADD_CYCLES(z80, 5);
-					break;
 				} break;
 
 				default:
