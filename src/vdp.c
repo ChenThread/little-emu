@@ -64,6 +64,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	int scx = (-vdp->regs[0x08])&0xFF;
 	int scy = (vdp->regs[0x09])&0xFF;
 
+	//vdp->regs[0x02] = 0xFF;
+	//vdp->regs[0x05] = 0xFF;
+	//vdp->regs[0x06] = 0xFF;
+
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);

@@ -1004,6 +1004,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					//if(z80->gpr[RC] == 0xBF) printf("OUTI %02X %02X %04X\n", z80->gpr[RB], z80->gpr[RC], sr);
 					Z80_ADD_CYCLES(z80, 4);
 					z80_io_write(sms, z80->timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
@@ -2014,12 +2015,12 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				t = z80->gpr[RL]; z80->gpr[RL] = z80->shadow[RL]; z80->shadow[RL] = t;
 
 				// also cover WZ
-				t = z80->shadow[0];
-				z80->shadow[0] = z80->shadow[2];
-				z80->shadow[2] = t;
-				t = z80->shadow[1];
-				z80->shadow[1] = z80->shadow[3];
-				z80->shadow[3] = t;
+				t = z80->wz[0];
+				z80->wz[0] = z80->wz[2];
+				z80->wz[2] = t;
+				t = z80->wz[1];
+				z80->wz[1] = z80->wz[3];
+				z80->wz[3] = t;
 			} break;
 
 			case 0xE9: if(ix >= 0) {
@@ -2074,7 +2075,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				uint16_t port = z80_fetch_op_x(z80, sms);
 				port &= 0x00FF;
 				port |= (port << 8);
-				//printf("IO WRITE %04X %02X\n", port, z80->gpr[RA]);
+				//printf("IO WRITE %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
 				z80_io_write(sms, z80->timestamp, port, z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 4);
 			} break;
@@ -2083,7 +2084,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				port &= 0x00FF;
 				port |= (port << 8);
 				z80->gpr[RA] = z80_io_read(sms, z80->timestamp, port);
-				printf("IN %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
+				//printf("IN %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
 				z80->gpr[RF] = (z80->gpr[RF]&0x01)
 					| (z80->gpr[RA]&0xA8)
 					| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
