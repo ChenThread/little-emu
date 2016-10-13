@@ -252,8 +252,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					}
 
 					// Write
-					v = (v == 0 || (s != 0 && prio == 0) ? s : v|pal);
-					//v |= pal;
+					if(s != 0 && (v == 0 || prio == 0)) {
+						v = s;
+					} else {
+						v |= pal;
+					}
 					assert(hctr >= 0 && hctr < 342);
 					frame_data[vctr][hctr] = sms->cram[v&0x1F];
 					//frame_data[vctr][hctr] = v&0x1F;

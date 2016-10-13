@@ -14,7 +14,14 @@
 
 #define TIME_IN_ORDER(t0, t1) (((t0) - (t1)) > ((t1) - (t0)))
 
+#if 0
+// OVERCLOCK
+#define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*1)
+#else
+// Normal
 #define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*3)
+#endif
+
 #define VDP_ADD_CYCLES(vdp, v) (vdp)->timestamp += ((v)*2)
 
 #define RB 0
