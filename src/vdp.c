@@ -31,16 +31,21 @@ void vdp_init(struct VDP *vdp)
 
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
+	timestamp &= ~1;
 	if(!TIME_IN_ORDER(vdp->timestamp, timestamp)) {
 		return;
 	}
 
-	timestamp &= ~1;
+	uint64_t timediff = timestamp - vdp->timestamp;
+
 	// Fetch vcounters/hcounters
 	uint32_t vctr_beg = ((vdp->timestamp/(684ULL))%((unsigned long long)SCANLINES));
 	uint32_t hctr_beg = (vdp->timestamp%(684ULL));
 	uint32_t vctr_end = ((timestamp/(684ULL))%((unsigned long long)SCANLINES));
 	uint32_t hctr_end = (timestamp%(684ULL));
+	vdp->timestamp_end = timestamp;
+	assert((hctr_beg&1) == 0);
+	assert((hctr_end&1) == 0);
 	hctr_beg >>= 1;
 	hctr_end >>= 1;
 
@@ -75,7 +80,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		int y = vctr - 67;
 
 		// Latch H-scroll
-		if(hbeg >= 47-17 && 47-17 <= hend) {
+		if(hbeg <= 47-17 && 47-17 < hend) {
 			vdp->scx = vdp->regs[0x08];
 			scx = (-vdp->scx)&0xFF;
 
@@ -84,6 +89,48 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			if(vctr == 66) {
 				vdp->scy = vdp->regs[0x09];
 				scy = (vdp->scy)&0xFF;
+			}
+		}
+
+		// Latch line counter
+		if(hbeg <= 47-17 && 47-17 < hend) {
+			if(y < 0 || y >= 193) {
+				vdp->line_counter = vdp->regs[0x0A];
+				if(vdp->line_counter == 0)
+					vdp->line_counter = 0xFF;
+				//printf("SLI Reload %02X\n", vdp->line_counter);
+			} else {
+				//printf("SLI dec %02X [%0d %0d]\n", vdp->line_counter, vctr_beg, vctr_end);
+				if((vdp->line_counter--) == 0) {
+					vdp->line_counter = vdp->regs[0x0A];
+					if(vdp->line_counter == 0)
+						vdp->line_counter = 0xFF;
+
+					//printf("SLI Reload %02X\n", vdp->line_counter);
+					if((sms->vdp.regs[0x00]&0x10) != 0) {
+						// Kill it here
+						z80_irq(&sms->z80, sms, 0xFF);
+						vdp->status |= 0x80;
+						hend = (47-17)+1;
+						timediff -= (hend-hbeg)*2;
+						//printf("%016lX\n", timediff);
+						vdp->timestamp_end -= timediff;
+						if(TIME_IN_ORDER(sms->z80.timestamp_end,
+								vdp->timestamp_end)) {
+							sms->z80.timestamp_end = vdp->timestamp_end;
+						}
+						vctr_end = vctr;
+						uint32_t vctr_chk = ((vdp->timestamp_end/(684ULL))%((unsigned long long)SCANLINES));
+						uint32_t hctr_chk = (vdp->timestamp_end%(684ULL));
+						//printf("hend %d %d\n", hend, hctr_chk>>1);
+						//printf("vend %d %d\n", vctr_end, vctr_chk);
+						fflush(stdout);
+						assert(vctr_end == vctr_chk);
+						assert(hend == (hctr_chk>>1));
+						//printf("SLI %3d %3d %3d %02X\n"
+						//	, vctr, hbeg, hend, vdp->line_counter);
+					}
+				}
 			}
 		}
 
@@ -217,12 +264,13 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		vctr++;
 		if(vctr == SCANLINES) { vctr = 0; }
 		assert(vctr < SCANLINES);
+		timediff -= (hend-hbeg)*2;
 	}
 
-	//printf("%03d.%03d -> %03d.%03d\n" , vctr_beg, hctr_beg , vctr_end, hctr_end);
+	//printf("%03d.%03d -> %03d.%03d\n" , vctr_beg, hctr_beg , vctr_end, hctr_end;
 
 	// Update timestamp
-	vdp->timestamp = timestamp;
+	vdp->timestamp = vdp->timestamp_end;
 }
 
 uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)

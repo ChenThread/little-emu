@@ -54,6 +54,7 @@ struct VDP
 	uint8_t read_buf;
 	uint8_t status;
 
+	uint8_t line_counter;
 	uint8_t scx, scy;
 	
 	// Tracking state

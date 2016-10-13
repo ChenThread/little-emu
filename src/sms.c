@@ -70,8 +70,10 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 	}
 
 	//uint64_t dt = timestamp - sms->timestamp;
-	z80_run(&(sms->z80), sms, timestamp);
-	vdp_run(&(sms->vdp), sms, timestamp);
+	while(TIME_IN_ORDER(sms->z80.timestamp_end, timestamp)) {
+		z80_run(&(sms->z80), sms, timestamp);
+		vdp_run(&(sms->vdp), sms, sms->z80.timestamp_end);
+	}
 
 	sms->timestamp = timestamp;
 }

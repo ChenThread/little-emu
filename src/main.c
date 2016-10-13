@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, SIG_DFL);
 
 	// Run
-	const int pt_VINT = 684*(70+192) + (47-17); // for PAL
+	const int pt_VINT = 684*(70+0xC1) + (47-17); // for PAL
 
 	uint64_t twait = time_now();
 	for(;;) {
