@@ -2011,6 +2011,23 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80->shadow[3] = t;
 			} break;
 
+			case 0xE9: if(ix >= 0) {
+					// JP (Iz)
+					z80->pc = z80_pair_pbe(z80->idx[ix&1]);
+				} else {
+					// JP (HL)
+					z80->pc = z80_pair_pbe(&z80->gpr[RH]);
+				} break;
+			case 0xF9: if(ix >= 0) {
+					// LD SP, Iz
+					z80->sp = z80_pair_pbe(z80->idx[ix&1]);
+					Z80_ADD_CYCLES(z80, 2);
+				} else {
+					// LD SP, HL
+					z80->sp = z80_pair_pbe(&z80->gpr[RH]);
+					Z80_ADD_CYCLES(z80, 2);
+				} break;
+
 			// Z=2
 			case 0xC2: // JP NZ, d
 				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x40) == 0);
@@ -2023,6 +2040,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				break;
 			case 0xDA: // JP C, d
 				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x01) != 0);
+				break;
+			case 0xE2: // JP PO, d
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x02) == 0);
+				break;
+			case 0xEA: // JP PE, d
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x02) != 0);
+				break;
+			case 0xF2: // JP P, d
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x80) == 0);
+				break;
+			case 0xFA: // JP M, d
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x80) != 0);
 				break;
 
 			// Z=3
