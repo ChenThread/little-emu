@@ -41,11 +41,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	// Draw screen section
 	int vctr = vctr_beg;
 	int lborder = ((vdp->regs[0x00]&0x00) != 0 ? 8 : 0);
-	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
+	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10]+0x1;
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 684);
-		int y = vctr - 46;
+		int y = vctr - 67;
 
 		if(y < 0 || y >= 192) {
 			if(y < -54 || y >= 192+48) {

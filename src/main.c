@@ -8,7 +8,7 @@ struct SMS sms_prev;
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
-SDL_Surface *surface = NULL;
+SDL_Texture *texture = NULL;
 
 int main(int argc, char *argv[])
 {
@@ -52,8 +52,11 @@ int main(int argc, char *argv[])
 		342*2,
 		SCANLINES*2,
 		0);
-	surface = SDL_GetWindowSurface(window);
-	renderer = SDL_CreateSoftwareRenderer(surface);
+	renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(window));
+	texture = SDL_CreateTexture(renderer,
+		SDL_PIXELFORMAT_BGRX8888,
+		SDL_TEXTUREACCESS_STREAMING,
+		342, SCANLINES);
 
 	// Tell SDL to get stuffed
 	signal(SIGINT,  SIG_DFL);
@@ -70,7 +73,26 @@ int main(int argc, char *argv[])
 		sms->vdp.status |= 0x80;
 		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
 
+		// Draw + upscale
+		void *pixels = NULL;
+		int pitch = 0;
+		SDL_LockTexture(texture, NULL, &pixels, &pitch);
+		for(int y = 0; y < SCANLINES; y++) {
+			uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
+			for(int x = 0; x < 342; x++) {
+				uint32_t v = frame_data[y][x];
+				uint32_t r = ((v>>0)&3)*0x55;
+				uint32_t g = ((v>>2)&3)*0x55;
+				uint32_t b = ((v>>4)&3)*0x55;
+				pp[x] = b|(g<<8)|(r<<16);
+			}
+		}
+		SDL_UnlockTexture(texture);
+		SDL_RenderCopy(renderer, texture, NULL, NULL);
+
 		//sms_copy(&sms_prev, &sms_current);
+		// Update
+		SDL_UpdateWindowSurface(window);
 		usleep(20000);
 	}
 	
