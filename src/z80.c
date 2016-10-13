@@ -18,6 +18,7 @@ static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 		//printf("%p %02X = ram[%04X]\n", sms, sms->ram[addr&0x1FFF], addr&0x1FFF);
 		return sms->ram[addr&0x1FFF];
 	} else if(addr < 0x0400 || !sms_rom_is_banked) {
+		//printf("%04X raw\n", addr);
 		return sms_rom[addr];
 	} else {
 		uint32_t raddr0 = (uint32_t)(addr&0x3FFF);
@@ -2082,7 +2083,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				port &= 0x00FF;
 				port |= (port << 8);
 				z80->gpr[RA] = z80_io_read(sms, z80->timestamp, port);
-				printf("IN %04X %02X\n", port, z80->gpr[RA]);
+				printf("IN %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
 				z80->gpr[RF] = (z80->gpr[RF]&0x01)
 					| (z80->gpr[RA]&0xA8)
 					| (z80->gpr[RA] == 0 ? 0x40 : 0x00)

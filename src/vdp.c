@@ -44,10 +44,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	hctr_end >>= 1;
 
 	// Fetch pointers
-	uint8_t *sp_tab_y = &sms->vram[((vdp->regs[0x05]&0x7E)<< 7)+0x00];
-	uint8_t *sp_tab_p = &sms->vram[((vdp->regs[0x05]&0x7E)<< 7)+0x80];
-	uint8_t *bg_names = &sms->vram[(vdp->regs[0x02]&0x0E)<<10];
-	uint8_t *sp_tiles = &sms->vram[(vdp->regs[0x06]&0x04)<<11];
+	uint8_t *sp_tab_y = &sms->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x00];
+	uint8_t *sp_tab_p = &sms->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x80];
+	uint8_t *sp_tiles = &sms->vram[((vdp->regs[0x06]<<11)&0x2000)];
+	uint8_t *bg_names = &sms->vram[((vdp->regs[0x02]<<10)&0x3800)];
 	uint8_t *bg_tiles = &sms->vram[0];
 
 	// Draw screen section
@@ -66,16 +66,20 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
-		int hend = (vctr == vctr_end ? hctr_end : 684);
+		int hend = (vctr == vctr_end ? hctr_end : 342);
 		int y = vctr - 67;
 
 		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
 			if(y < -54 || y >= 192+48) {
+				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
+					assert(hctr >= 0 && hctr < 342);
 					frame_data[vctr][hctr] = 0x00;
 				}
 			} else {
+				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
+					assert(hctr >= 0 && hctr < 342);
 					frame_data[vctr][hctr] = bcol;
 				}
 			}
@@ -96,6 +100,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				}
 			}
 
+			assert(vctr >= 0 && vctr < SCANLINES);
 			for(int hctr = hbeg; hctr < hend; hctr++) {
 				int x = hctr - 47;
 				if(x >= lborder && x < 256) {
@@ -172,9 +177,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					// Write
 					v = (v == 0 || (s != 0 && prio == 0) ? s : v|pal);
 					//v |= pal;
+					assert(hctr >= 0 && hctr < 342);
 					frame_data[vctr][hctr] = sms->cram[v&0x1F];
 					//frame_data[vctr][hctr] = v&0x1F;
 				} else {
+					assert(hctr >= 0 && hctr < 342);
 					frame_data[vctr][hctr] = bcol;
 				}
 			}
@@ -209,6 +216,7 @@ uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	vdp->ctrl_latch = 0;
 	uint8_t ret = vdp->read_buf;
 	vdp->read_buf = sms->vram[vdp->ctrl_addr&0x3FFF];
+	printf("VDP READ %04X %02X -> %02X\n", vdp->ctrl_addr, ret, vdp->read_buf);
 	vdp->ctrl_addr = ((vdp->ctrl_addr+1)&0x3FFF)
 		| (vdp->ctrl_addr&0xC000);
 	return ret;
