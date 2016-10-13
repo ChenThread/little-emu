@@ -383,7 +383,8 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 	// Run ops
 	uint64_t lstamp = z80->timestamp;
-	while(z80->timestamp < timestamp) {
+	z80->timestamp_end = timestamp;
+	while(z80->timestamp < z80->timestamp_end) {
 		//if(false && z80->pc != 0x215A) {
 		if(false) {
 			printf("%020lld: %04X: %02X: A=%02X SP=%04X\n"
@@ -893,9 +894,174 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					break;
+				} break;
+				case 0xB2: { // INIR
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_io_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = (z80->gpr[RC]+1)&0xFF;
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
 					if(z80->gpr[RB] == 0xFF) {
 						break;
 					}
+					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
+					Z80_ADD_CYCLES(z80, 5);
+				} break;
+
+				case 0xAA: { // IND
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_io_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = (z80->gpr[RC]-1)&0xFF;
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					break;
+				} break;
+				case 0xBA: { // INDR
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RB]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RH]);
+					uint8_t dat = z80_io_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = (z80->gpr[RC]-1)&0xFF;
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					if(z80->gpr[RB] == 0xFF) {
+						break;
+					}
+					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
+					Z80_ADD_CYCLES(z80, 5);
+				} break;
+
+				//
+
+				case 0xA3: { // OUTI
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_io_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = z80->gpr[RL];
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					break;
+				} break;
+				case 0xB3: { // OTIR
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_io_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = z80->gpr[RL];
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
+					if(z80->gpr[RB] == 0xFF) {
+						break;
+					}
+					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
+					Z80_ADD_CYCLES(z80, 5);
+					break;
+				} break;
+
+				case 0xAB: { // OUTD
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_io_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = z80->gpr[RL];
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					break;
+				} break;
+				case 0xBB: { // OTDR
+					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
+					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
+					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_io_write(sms, z80->timestamp, dr, dat);
+					Z80_ADD_CYCLES(z80, 4);
+					z80->gpr[RB]--;
+
+					uint8_t magic1 = z80->gpr[RL];
+					uint8_t magic2 = (magic1+dat);
+					z80->gpr[RF] = (z80->gpr[RB]&0xA8)
+						| (magic2 < dat ? 0x11 : 0x00)
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00)
+						| z80_parity(z80->gpr[RB]^(magic2&7))
+						| ((dat>>6)&0x02);
+
+					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
+					if(z80->gpr[RB] == 0xFF) {
+						break;
+					}
+					z80->pc -= 2;
+					z80->wz[0] = (uint8_t)(z80->pc>>8);
+					Z80_ADD_CYCLES(z80, 5);
+					break;
 				} break;
 
 				default:
@@ -1127,7 +1293,17 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 		//printf("%04X %02X %04X\n", z80->pc-1, op, z80->sp);
 
 		// X=1 decode (LD y, z)
-		if((op>>6) == 1 && op != 0x76) {
+		if((op>>6) == 1) {
+
+			if(op == 0x76) {
+				// HALT
+				if(TIME_IN_ORDER(z80->timestamp, z80->timestamp_end)) {
+					z80->timestamp = z80->timestamp_end;
+				}
+				z80->halted = true;
+				return;
+			}
+
 			int oy = (op>>3)&7;
 			int oz = op&7;
 
