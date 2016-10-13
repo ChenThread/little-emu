@@ -53,6 +53,8 @@ struct VDP
 	uint8_t ctrl_latch;
 	uint8_t read_buf;
 	uint8_t status;
+
+	uint8_t scx, scy;
 	
 	// Tracking state
 	uint64_t timestamp;

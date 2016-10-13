@@ -35,6 +35,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		return;
 	}
 
+	timestamp &= ~1;
 	// Fetch vcounters/hcounters
 	uint32_t vctr_beg = ((vdp->timestamp/(684ULL))%((unsigned long long)SCANLINES));
 	uint32_t hctr_beg = (vdp->timestamp%(684ULL));
@@ -61,8 +62,8 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	sdetwide <<= sshift;
 	int lborder = ((vdp->regs[0x00]&0x20) != 0 ? 8 : 0);
 	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
-	int scx = (-vdp->regs[0x08])&0xFF;
-	int scy = (vdp->regs[0x09])&0xFF;
+	int scx = (-vdp->scx)&0xFF;
+	int scy = (vdp->scy)&0xFF;
 
 	//vdp->regs[0x02] = 0xFF;
 	//vdp->regs[0x05] = 0xFF;
@@ -72,6 +73,19 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);
 		int y = vctr - 67;
+
+		// Latch H-scroll
+		if(hbeg >= 47-17 && 47-17 <= hend) {
+			vdp->scx = vdp->regs[0x08];
+			scx = (-vdp->scx)&0xFF;
+
+			// Might as well latch V-scroll while we're at it
+			// THIS IS A GUESS.
+			if(vctr == 66) {
+				vdp->scy = vdp->regs[0x09];
+				scy = (vdp->scy)&0xFF;
+			}
+		}
 
 		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
 			if(y < -54 || y >= 192+48) {
@@ -161,6 +175,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 							uint16_t sn = (uint16_t)sp_tab_p[j*2+1];
 							sn &= smask;
 							uint16_t sy = (uint16_t)(y-sp_tab_y[j]);
+							sy &= 0xFF;
 							uint8_t *sp = &sp_tiles[sn*4*8];
 							sx >>= sshift;
 							sy >>= sshift;
