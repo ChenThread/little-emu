@@ -1959,6 +1959,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			case 0xD8: // RET C
 				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x01) != 0);
 				break;
+			case 0xE0: // RET PO
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x02) == 0);
+				break;
+			case 0xE8: // RET PE
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x02) != 0);
+				break;
+			case 0xF0: // RET P
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x80) == 0);
+				break;
+			case 0xF8: // RET M
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x80) != 0);
+				break;
 
 			// Z=1
 			case 0xC1: // POP BC
