@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #include <unistd.h>
+#include <signal.h>
 
 #include <SDL.h>
 
@@ -46,6 +47,11 @@ struct Z80
 struct VDP
 {
 	// VDP state
+	uint8_t regs[16];
+	uint16_t ctrl_addr;
+	uint8_t ctrl_latch;
+	uint8_t read_buf;
+	uint8_t status;
 	
 	// Tracking state
 	uint64_t timestamp;
@@ -85,6 +91,11 @@ void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMS *sms, uint64_t timestamp);
 
 // vdp.c
+extern uint8_t frame_data[SCANLINES][342];
+uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
+uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
+void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val);
+void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val);
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
 void vdp_init(struct VDP *vdp);
 

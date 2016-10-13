@@ -45,11 +45,11 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 			break;
 
 		case 4: // VDP data
-			// TODO!
+			vdp_write_data(&sms->vdp, sms, timestamp, val);
 			break;
 
 		case 5: // VDP control
-			// TODO!
+			vdp_write_ctrl(&sms->vdp, sms, timestamp, val);
 			break;
 
 		case 6: // I/O port A
@@ -95,12 +95,10 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return (uint8_t)(((timestamp%(684ULL))-94)>>2);
 
 		case 4: // VDP data
-			// TODO!
-			return 0xFF;
+			return vdp_read_data(&sms->vdp, sms, timestamp);
 
 		case 5: // VDP control
-			// TODO!
-			return 0xFF;
+			return vdp_read_ctrl(&sms->vdp, sms, timestamp);
 
 		case 6: // I/O port A
 			return sms_input_fetch(sms, timestamp, 0);

@@ -1,5 +1,5 @@
 #!/bin/sh
-clang -O2 -o lsms \
+clang -O2 -g -o lsms \
 	\
 	src/sms.c \
 	src/vdp.c \

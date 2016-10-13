@@ -6,6 +6,10 @@ bool sms_rom_is_banked = false;
 struct SMS sms_current;
 struct SMS sms_prev;
 
+SDL_Window *window = NULL;
+SDL_Renderer *renderer = NULL;
+SDL_Surface *surface = NULL;
+
 int main(int argc, char *argv[])
 {
 	assert(argc > 1);
@@ -40,15 +44,34 @@ int main(int argc, char *argv[])
 	sms_init(&sms_current);
 	sms_copy(&sms_prev, &sms_current);
 
+	// Set up SDL
+	SDL_Init(SDL_INIT_VIDEO);
+	window = SDL_CreateWindow("littlesms",
+		SDL_WINDOWPOS_CENTERED,
+		SDL_WINDOWPOS_CENTERED,
+		342*2,
+		SCANLINES*2,
+		0);
+	surface = SDL_GetWindowSurface(window);
+	renderer = SDL_CreateSoftwareRenderer(surface);
+
+	// Tell SDL to get stuffed
+	signal(SIGINT,  SIG_DFL);
+	signal(SIGTERM, SIG_DFL);
+
 	// Run
+	const int pt_VINT = 684*(46+192) + (47-17); // for PAL
 	for(;;) {
 		struct SMS *sms = &sms_current;
+
+		// Run a frame
+		sms_run(sms, sms->timestamp + pt_VINT);
 		z80_irq(&sms->z80, sms, 0xFF);
-		sms_run(sms, sms->timestamp + 684*1);
-		sms->z80.in_irq = 0;
-		sms_run(sms, sms->timestamp + 684*(SCANLINES-1));
+		sms->vdp.status |= 0x80;
+		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
+
 		//sms_copy(&sms_prev, &sms_current);
-		//usleep(20000);
+		usleep(20000);
 	}
 	
 	return 0;
