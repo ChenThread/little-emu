@@ -69,8 +69,12 @@ int main(int argc, char *argv[])
 
 		// Run a frame
 		sms_run(sms, sms->timestamp + pt_VINT);
-		z80_irq(&sms->z80, sms, 0xFF);
-		sms->vdp.status |= 0x80;
+
+		// VINT
+		if((sms->vdp.regs[0x01]&0x20) != 0) {
+			z80_irq(&sms->z80, sms, 0xFF);
+			sms->vdp.status |= 0x80;
+		}
 		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
 
 		// Draw + upscale

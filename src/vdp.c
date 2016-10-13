@@ -71,7 +71,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					int px = (x+scx)&0xFF;
 
 					// Read name table for tile
-					uint8_t *np = &bg_names[2*(py*32+px)];
+					uint8_t *np = &bg_names[2*((py>>3)*32+(px>>3))];
 					uint16_t nl = (uint16_t)(np[0]);
 					uint16_t nh = (uint16_t)(np[1]);
 					uint16_t n = nl|(nh<<8);
@@ -82,7 +82,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					uint8_t xflip = ((nh>>1)&1)*7;
 					uint8_t yflip = ((nh>>2)&1)*7;
 					int spx = (px^xflip^7)&7;
-					int spy = (py^yflip)&7;
+					int spy = ((py^yflip)&7)<<2;
 
 					// Read tile
 					uint8_t t0 = tp[spy+0];
@@ -101,6 +101,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					// Write
 					v = (v == 0 ? 0 : v|pal);
 					frame_data[vctr][hctr] = sms->cram[v&0x1F];
+					//frame_data[vctr][hctr] = v&0x1F;
 				} else {
 					frame_data[vctr][hctr] = bcol;
 				}
@@ -179,6 +180,7 @@ void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 	if(vdp->ctrl_addr >= 0xC000) {
 		// CRAM
 		sms->cram[vdp->ctrl_addr&0x001F] = val;
+		printf("CRAM %02X %02X\n", vdp->ctrl_addr&0x1F, val);
 	} else {
 		// VRAM
 		sms->vram[vdp->ctrl_addr&0x3FFF] = val;

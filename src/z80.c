@@ -942,7 +942,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
-					if(z80->gpr[RB] == 0xFF) {
+					if(z80->gpr[RB] == 0x00) {
 						break;
 					}
 					z80->pc -= 2;
@@ -988,7 +988,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
-					if(z80->gpr[RB] == 0xFF) {
+					if(z80->gpr[RB] == 0x00) {
 						break;
 					}
 					z80->pc -= 2;
@@ -1036,7 +1036,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((++z80->gpr[RL]) == 0) { z80->gpr[RH]++; }
-					if(z80->gpr[RB] == 0xFF) {
+					if(z80->gpr[RB] == 0x00) {
 						break;
 					}
 					z80->pc -= 2;
@@ -1083,7 +1083,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| ((dat>>6)&0x02);
 
 					if((z80->gpr[RL]--) == 0) { z80->gpr[RH]--; }
-					if(z80->gpr[RB] == 0xFF) {
+					if(z80->gpr[RB] == 0x00) {
 						break;
 					}
 					z80->pc -= 2;
