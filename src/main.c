@@ -10,6 +10,18 @@ SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
 
+uint64_t time_now(void)
+{
+	struct timeval ts;
+	gettimeofday(&ts, NULL);
+
+	uint64_t sec = ts.tv_sec;
+	uint64_t usec = ts.tv_usec;
+	sec *= 1000000ULL;
+	usec += sec;
+	return usec;
+}
+
 int main(int argc, char *argv[])
 {
 	assert(argc > 1);
@@ -64,6 +76,8 @@ int main(int argc, char *argv[])
 
 	// Run
 	const int pt_VINT = 684*(70+192) + (47-17); // for PAL
+
+	uint64_t twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
 
@@ -97,7 +111,11 @@ int main(int argc, char *argv[])
 		//sms_copy(&sms_prev, &sms_current);
 		// Update
 		SDL_UpdateWindowSurface(window);
-		usleep(20000);
+		uint64_t tnow = time_now();
+		twait += 20000;
+		if(TIME_IN_ORDER(tnow, twait)) {
+			usleep((useconds_t)(twait-tnow));
+		}
 	}
 	
 	return 0;
