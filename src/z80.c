@@ -1024,6 +1024,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint16_t sr = z80_pair_pbe(&z80->gpr[RH]);
 					uint16_t dr = z80_pair_pbe(&z80->gpr[RB]);
 					uint8_t dat = z80_mem_read(sms, z80->timestamp, sr);
+					//printf("OTIR %02X %02X %04X\n", z80->gpr[RB], z80->gpr[RC], sr);
 					Z80_ADD_CYCLES(z80, 4);
 					z80_io_write(sms, z80->timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
@@ -2074,6 +2075,10 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				port &= 0x00FF;
 				port |= (port << 8);
 				z80->gpr[RA] = z80_io_read(sms, z80->timestamp, port);
+				z80->gpr[RF] = (z80->gpr[RF]&0x01)
+					| (z80->gpr[RA]&0xA8)
+					| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
+					| z80_parity(z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 4);
 			} break;
 

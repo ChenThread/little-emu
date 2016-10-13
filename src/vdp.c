@@ -185,6 +185,7 @@ void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 	} else {
 		// VRAM
 		sms->vram[vdp->ctrl_addr&0x3FFF] = val;
+		//printf("VRAM %04X %02X\n", vdp->ctrl_addr&0x3FFF, val);
 	}
 
 	vdp->ctrl_addr = ((vdp->ctrl_addr+1)&0x3FFF)
