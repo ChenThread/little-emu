@@ -41,7 +41,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	// Draw screen section
 	int vctr = vctr_beg;
 	int lborder = ((vdp->regs[0x00]&0x00) != 0 ? 8 : 0);
-	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10]+0x1;
+	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
+	int scx = vdp->regs[0x08];
+	int scy = vdp->regs[0x09];
+
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 684);
@@ -58,11 +61,46 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				}
 			}
 		} else {
+			int py = (y+scy)%(28*8);
+
 			for(int hctr = hbeg; hctr < hend; hctr++) {
 				int x = hctr - 47;
 				if(x >= lborder && x < 256) {
-					// TODO get colour
-					frame_data[vctr][hctr] = 0x0F;
+					// TODO get colour PROPERLY
+					// TODO sprites
+					int px = (x+scx)&0xFF;
+
+					// Read name table for tile
+					uint8_t *np = &bg_names[2*(py*32+px)];
+					uint16_t nl = (uint16_t)(np[0]);
+					uint16_t nh = (uint16_t)(np[1]);
+					uint16_t n = nl|(nh<<8);
+					uint16_t tile = n&0x1FF;
+					uint8_t *tp = &bg_tiles[tile*4*8];
+					uint8_t pal = (nh<<1)&0x10;
+					uint8_t prio = (nh>>4)&0xFF;
+					uint8_t xflip = ((nh>>1)&1)*7;
+					uint8_t yflip = ((nh>>2)&1)*7;
+					int spx = (px^xflip^7)&7;
+					int spy = (py^yflip)&7;
+
+					// Read tile
+					uint8_t t0 = tp[spy+0];
+					uint8_t t1 = tp[spy+1];
+					uint8_t t2 = tp[spy+2];
+					uint8_t t3 = tp[spy+3];
+
+					// Planar to chunky
+					uint8_t v = 0
+						| (((t0>>spx)&1)<<0)
+						| (((t1>>spx)&1)<<1)
+						| (((t2>>spx)&1)<<2)
+						| (((t3>>spx)&1)<<3)
+						| 0;
+
+					// Write
+					v = (v == 0 ? 0 : v|pal);
+					frame_data[vctr][hctr] = sms->cram[v&0x1F];
 				} else {
 					frame_data[vctr][hctr] = bcol;
 				}
