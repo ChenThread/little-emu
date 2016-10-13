@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, SIG_DFL);
 
 	// Run
-	const int pt_VINT = 684*(46+192) + (47-17); // for PAL
+	const int pt_VINT = 684*(70+192) + (47-17); // for PAL
 	for(;;) {
 		struct SMS *sms = &sms_current;
 
@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
 				uint32_t r = ((v>>0)&3)*0x55;
 				uint32_t g = ((v>>2)&3)*0x55;
 				uint32_t b = ((v>>4)&3)*0x55;
-				pp[x] = b|(g<<8)|(r<<16);
+				pp[x] = (b<<24)|(g<<16)|(r<<8);
 			}
 		}
 		SDL_UnlockTexture(texture);
