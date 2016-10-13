@@ -95,6 +95,12 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			uint8_t stab[8];
 			int stab_len = 0;
 			for(int i = 0; i < 64; i++) {
+				// End of list marker
+				// XXX: only for 192-line mode!
+				if(sp_tab_y[i] == 0xD0) {
+					break;
+				}
+
 				uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
 				if(sy < sdethigh) {
 					stab[stab_len++] = i;
@@ -220,7 +226,7 @@ uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	vdp->ctrl_latch = 0;
 	uint8_t ret = vdp->read_buf;
 	vdp->read_buf = sms->vram[vdp->ctrl_addr&0x3FFF];
-	printf("VDP READ %04X %02X -> %02X\n", vdp->ctrl_addr, ret, vdp->read_buf);
+	//printf("VDP READ %04X %02X -> %02X\n", vdp->ctrl_addr, ret, vdp->read_buf);
 	vdp->ctrl_addr = ((vdp->ctrl_addr+1)&0x3FFF)
 		| (vdp->ctrl_addr&0xC000);
 	return ret;
