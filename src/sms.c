@@ -48,10 +48,10 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 void sms_init(struct SMS *sms)
 {
 	*sms = (struct SMS){ .timestamp=0 };
-	sms->paging[0] = 0;
-	sms->paging[1] = 0;
-	sms->paging[2] = 1;
-	sms->paging[3] = 2;
+	sms->paging[3] = 0; // 0xFFFC
+	sms->paging[0] = 0; // 0xFFFD
+	sms->paging[1] = 1; // 0xFFFE
+	sms->paging[2] = 2; // 0xFFFF
 	sms->joy[0] = 0xFF;
 	sms->joy[1] = 0xFF;
 	z80_init(&(sms->z80));

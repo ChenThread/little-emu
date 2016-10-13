@@ -8,7 +8,7 @@ static void z80_mem_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, ui
 	}
 
 	if(addr >= 0xFFFC && sms_rom_is_banked) {
-		sms->paging[addr&3] = val;
+		sms->paging[(addr-1)&3] = val;
 	}
 }
 
@@ -20,8 +20,11 @@ static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 	} else if(addr < 0x0400 || !sms_rom_is_banked) {
 		return sms_rom[addr];
 	} else {
-		return sms_rom[((uint32_t)(addr&0x3FFF))
-			+((sms->paging[(addr>>14)+1]&0x1F)<<14)];
+		uint32_t raddr = ((uint32_t)(addr&0x3FFF))
+			+((((uint32_t)(sms->paging[(addr>>14)&3]))&0x1F)<<14);
+		//printf("%04X -> %08X (%02X %02X %02X\n", addr, raddr
+			//, sms->paging[0] , sms->paging[1] , sms->paging[2]);
+		return sms_rom[raddr];
 	}
 }
 

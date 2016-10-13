@@ -40,10 +40,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	// Draw screen section
 	int vctr = vctr_beg;
-	int lborder = ((vdp->regs[0x00]&0x00) != 0 ? 8 : 0);
+	int lborder = ((vdp->regs[0x00]&0x20) != 0 ? 8 : 0);
 	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
-	int scx = vdp->regs[0x08];
-	int scy = vdp->regs[0x09];
+	int scx = (-vdp->regs[0x08])&0xFF;
+	int scy = (vdp->regs[0x09])&0xFF;
 
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
@@ -76,6 +76,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					uint16_t nh = (uint16_t)(np[1]);
 					uint16_t n = nl|(nh<<8);
 					uint16_t tile = n&0x1FF;
+					//tile = ((px>>3)+(py>>3)*32)&0x1FF;
 					uint8_t *tp = &bg_tiles[tile*4*8];
 					uint8_t pal = (nh<<1)&0x10;
 					uint8_t prio = (nh>>4)&0xFF;
@@ -97,6 +98,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 						| (((t2>>spx)&1)<<2)
 						| (((t3>>spx)&1)<<3)
 						| 0;
+					//v = spx^spy;
 
 					// Write
 					v = (v == 0 ? 0 : v|pal);
@@ -148,11 +150,12 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 	if(vdp->ctrl_latch == 0) {
 		vdp->ctrl_addr &= ~0x00FF;
 		vdp->ctrl_addr |= ((uint16_t)val)<<0;
+		//printf("VDP LOWA %04X\n", vdp->ctrl_addr);
 		vdp->ctrl_latch = 1;
 	} else {
 		vdp->ctrl_addr &= ~0xFF00;
 		vdp->ctrl_addr |= ((uint16_t)val)<<8;
-		printf("VDP CTRL %04X\n", vdp->ctrl_addr);
+		//printf("VDP CTRL %04X\n", vdp->ctrl_addr);
 
 		switch(vdp->ctrl_addr>>14) {
 			case 0: // Read
