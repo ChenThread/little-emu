@@ -76,6 +76,7 @@ struct SMS
 	struct VDP vdp;
 	struct PSG psg;
 	uint8_t paging[4];
+	uint8_t joy[2];
 
 	uint64_t timestamp;
 	uint64_t timestamp_end;

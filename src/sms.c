@@ -2,9 +2,46 @@
 
 uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 {
-	// TODO!
 	printf("input %016llX %d\n", (unsigned long long)timestamp, port);
-	return 0xFF;
+
+	SDL_Event ev;
+	while(SDL_PollEvent(&ev)) {
+		switch(ev.type) {
+			case SDL_KEYDOWN:
+				switch(ev.key.keysym.sym)
+				{
+					case SDLK_w: sms->joy[0] &= ~0x01;
+					case SDLK_s: sms->joy[0] &= ~0x02;
+					case SDLK_a: sms->joy[0] &= ~0x04;
+					case SDLK_d: sms->joy[0] &= ~0x08;
+					case SDLK_KP_2: sms->joy[0] &= ~0x10;
+					case SDLK_KP_3: sms->joy[0] &= ~0x20;
+					default:
+						break;
+				} break;
+
+			case SDL_KEYUP:
+				switch(ev.key.keysym.sym)
+				{
+					case SDLK_w: sms->joy[0] |= 0x01;
+					case SDLK_s: sms->joy[0] |= 0x02;
+					case SDLK_a: sms->joy[0] |= 0x04;
+					case SDLK_d: sms->joy[0] |= 0x08;
+					case SDLK_KP_2: sms->joy[0] |= 0x10;
+					case SDLK_KP_3: sms->joy[0] |= 0x20;
+					default:
+						break;
+				} break;
+
+			case SDL_QUIT:
+				exit(0);
+				break;
+			default:
+				break;
+		}
+	}
+
+	return sms->joy[port&1];
 }
 
 void sms_init(struct SMS *sms)
@@ -14,6 +51,8 @@ void sms_init(struct SMS *sms)
 	sms->paging[1] = 0;
 	sms->paging[2] = 1;
 	sms->paging[3] = 2;
+	sms->joy[0] = 0xFF;
+	sms->joy[1] = 0xFF;
 	z80_init(&(sms->z80));
 	vdp_init(&(sms->vdp));
 }

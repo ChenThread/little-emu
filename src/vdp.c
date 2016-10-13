@@ -152,6 +152,7 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 	} else {
 		vdp->ctrl_addr &= ~0xFF00;
 		vdp->ctrl_addr |= ((uint16_t)val)<<8;
+		printf("VDP CTRL %04X\n", vdp->ctrl_addr);
 
 		switch(vdp->ctrl_addr>>14) {
 			case 0: // Read
