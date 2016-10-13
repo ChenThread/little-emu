@@ -2097,6 +2097,34 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				Z80_ADD_CYCLES(z80, 4);
 			} break;
 
+			case 0xE3: if(ix >= 0) {
+					// EX (SP), Iz
+					// XXX: actual timing pattern is unknown
+					uint8_t tl = z80_mem_read(sms, z80->timestamp, z80->sp+0);
+					Z80_ADD_CYCLES(z80, 4);
+					uint8_t th = z80_mem_read(sms, z80->timestamp, z80->sp+1);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, z80->sp+0, z80->idx[ix&1][1]);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, z80->sp+1, z80->idx[ix&1][0]);
+					Z80_ADD_CYCLES(z80, 3);
+					z80->idx[ix&1][1] = tl;
+					z80->idx[ix&1][0] = th;
+
+				} else {
+					// EX (SP), HL
+					// XXX: actual timing pattern is unknown
+					uint8_t tl = z80_mem_read(sms, z80->timestamp, z80->sp+0);
+					Z80_ADD_CYCLES(z80, 4);
+					uint8_t th = z80_mem_read(sms, z80->timestamp, z80->sp+1);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, z80->sp+0, z80->gpr[RL]);
+					Z80_ADD_CYCLES(z80, 4);
+					z80_mem_write(sms, z80->timestamp, z80->sp+1, z80->gpr[RH]);
+					Z80_ADD_CYCLES(z80, 3);
+					z80->gpr[RL] = tl;
+					z80->gpr[RH] = th;
+				} break;
 			case 0xEB: { // EX DE, HL
 				uint8_t t;
 				t = z80->gpr[RH];
