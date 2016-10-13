@@ -1960,10 +1960,10 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x01) != 0);
 				break;
 			case 0xE0: // RET PO
-				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x02) == 0);
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x04) == 0);
 				break;
 			case 0xE8: // RET PE
-				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x02) != 0);
+				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x04) != 0);
 				break;
 			case 0xF0: // RET P
 				z80_op_ret_cond(z80, sms, (z80->gpr[RF]&0x80) == 0);
@@ -2057,10 +2057,10 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x01) != 0);
 				break;
 			case 0xE2: // JP PO, d
-				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x02) == 0);
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x04) == 0);
 				break;
 			case 0xEA: // JP PE, d
-				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x02) != 0);
+				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x04) != 0);
 				break;
 			case 0xF2: // JP P, d
 				z80_op_jp_cond(z80, sms, (z80->gpr[RF]&0x80) == 0);
@@ -2125,6 +2125,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				break;
 			case 0xDC: // CALL C, d
 				z80_op_call_cond(z80, sms, (z80->gpr[RF]&0x01) != 0);
+				break;
+			case 0xE4: // CALL PO, d
+				z80_op_call_cond(z80, sms, (z80->gpr[RF]&0x04) == 0);
+				break;
+			case 0xEC: // CALL PE, d
+				z80_op_call_cond(z80, sms, (z80->gpr[RF]&0x04) != 0);
+				break;
+			case 0xF4: // CALL P, d
+				z80_op_call_cond(z80, sms, (z80->gpr[RF]&0x80) == 0);
+				break;
+			case 0xFC: // CALL M, d
+				z80_op_call_cond(z80, sms, (z80->gpr[RF]&0x80) != 0);
 				break;
 
 			// Z=5
