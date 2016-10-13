@@ -127,7 +127,6 @@ void z80_reset(struct Z80 *z80)
 	z80->gpr[RA] = 0xFF;
 	z80->halted = 0;
 	z80->im = 0;
-	z80->noni = 0;
 	Z80_ADD_CYCLES(z80, 3);
 }
 
@@ -366,6 +365,37 @@ static void z80_op_rst(struct Z80 *z80, struct SMS *sms, uint16_t addr)
 	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = addr;
+}
+
+void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
+{
+	if(z80->iff1 == 0) {
+		return;
+	}
+
+	// TODO: fetch op using dat
+	assert(z80->im == 1);
+
+	Z80_ADD_CYCLES(z80, 7);
+	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+	Z80_ADD_CYCLES(z80, 3);
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+	Z80_ADD_CYCLES(z80, 3);
+	z80->pc = 0x0038;
+	z80->in_irq = 1;
+}
+
+void z80_nmi(struct Z80 *z80, struct SMS *sms)
+{
+	z80->iff1 = 0;
+	Z80_ADD_CYCLES(z80, 5);
+	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+	Z80_ADD_CYCLES(z80, 3);
+	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+	Z80_ADD_CYCLES(z80, 3);
+	z80->pc = 0x0066;
 }
 
 void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
@@ -621,11 +651,11 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				// Z=6: IM x
 				case 0x46: z80->im = 0; break;
 				case 0x4E: z80->im = 0; break;
-				case 0x56: z80->im = 3; break; // FIXME: find actual mode for this
-				case 0x5E: z80->im = 3; break;
-				case 0x66: z80->im = 1; break;
-				case 0x6E: z80->im = 1; break;
-				case 0x76: z80->im = 2; break;
+				case 0x56: z80->im = 1; break;
+				case 0x5E: z80->im = 2; break;
+				case 0x66: z80->im = 0; break;
+				case 0x6E: z80->im = 0; break;
+				case 0x76: z80->im = 1; break;
 				case 0x7E: z80->im = 2; break;
 
 				// Z=7

@@ -34,7 +34,7 @@ struct Z80
 	uint8_t i,r,iff1,iff2;
 	uint16_t sp;
 	uint16_t pc;
-	uint8_t halted, im, noni;
+	uint8_t halted, im, in_irq;
 
 	// Tracking state
 	uint64_t timestamp;
@@ -85,6 +85,8 @@ void sms_run(struct SMS *sms, uint64_t timestamp);
 // z80.c
 void z80_reset(struct Z80 *z80);
 void z80_init(struct Z80 *z80);
+void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat);
+void z80_nmi(struct Z80 *z80, struct SMS *sms);
 void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp);
 
 
