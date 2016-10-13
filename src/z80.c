@@ -89,7 +89,7 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return 0xFF;
 
 		case 2: // V counter
-			return (uint8_t)((timestamp/(684ULL))%313ULL);
+			return (uint8_t)((timestamp/(684ULL))%((unsigned long long)SCANLINES));
 
 		case 3: // H counter
 			return (uint8_t)(((timestamp%(684ULL))-94)>>2);

@@ -24,6 +24,8 @@
 #define RF 6
 #define RA 7
 
+#define SCANLINES 313
+
 struct Z80
 {
 	// CPU state
@@ -81,6 +83,10 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port);
 void sms_init(struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMS *sms, uint64_t timestamp);
+
+// vdp.c
+void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
+void vdp_init(struct VDP *vdp);
 
 // z80.c
 void z80_reset(struct Z80 *z80);

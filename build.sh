@@ -2,6 +2,7 @@
 clang -O2 -o lsms \
 	\
 	src/sms.c \
+	src/vdp.c \
 	src/z80.c \
 	\
 	src/main.c \

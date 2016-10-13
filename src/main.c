@@ -46,7 +46,7 @@ int main(int argc, char *argv[])
 		z80_irq(&sms->z80, sms, 0xFF);
 		sms_run(sms, sms->timestamp + 684*1);
 		sms->z80.in_irq = 0;
-		sms_run(sms, sms->timestamp + 684*(313-1));
+		sms_run(sms, sms->timestamp + 684*(SCANLINES-1));
 		//sms_copy(&sms_prev, &sms_current);
 		//usleep(20000);
 	}

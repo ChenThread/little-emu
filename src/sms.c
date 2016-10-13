@@ -15,6 +15,7 @@ void sms_init(struct SMS *sms)
 	sms->paging[2] = 1;
 	sms->paging[3] = 2;
 	z80_init(&(sms->z80));
+	vdp_init(&(sms->vdp));
 }
 
 void sms_copy(struct SMS *dest, struct SMS *src)
@@ -30,6 +31,7 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 
 	//uint64_t dt = timestamp - sms->timestamp;
 	z80_run(&(sms->z80), sms, timestamp);
+	vdp_run(&(sms->vdp), sms, timestamp);
 
 	sms->timestamp = timestamp;
 }
