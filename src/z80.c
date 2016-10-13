@@ -86,10 +86,8 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 	switch(port)
 	{
 		case 0: // Memory control
-			return 0xAB;
-
 		case 1: // I/O port control
-			// TODO!
+			// These are write-only regs!
 			return 0xFF;
 
 		case 2: // V counter
