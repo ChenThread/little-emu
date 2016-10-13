@@ -16,6 +16,17 @@ void vdp_init(struct VDP *vdp)
 	vdp->ctrl_addr = 0xBF00;
 	vdp->ctrl_latch = 0;
 	vdp->read_buf = 0x00;
+	vdp->status = 0x00;
+	vdp->regs[0x00] = 0x26;
+	vdp->regs[0x01] = 0xE0;
+	vdp->regs[0x02] = 0xFF;
+	vdp->regs[0x03] = 0xFF;
+	vdp->regs[0x04] = 0xFF;
+	vdp->regs[0x05] = 0xFF;
+	vdp->regs[0x06] = 0xFF;
+	vdp->regs[0x07] = 0x00;
+	vdp->regs[0x08] = 0x00;
+	vdp->regs[0x09] = 0x00;
 }
 
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
@@ -188,7 +199,7 @@ uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	vdp->ctrl_latch = 0;
 	sms->z80.in_irq = 0;
 	uint8_t ret = vdp->status;
-	vdp->status = 0x1F;
+	vdp->status = 0x00;
 	return ret;
 }
 
