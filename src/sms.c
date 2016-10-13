@@ -10,12 +10,12 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 			case SDL_KEYDOWN:
 				switch(ev.key.keysym.sym)
 				{
-					case SDLK_w: sms->joy[0] &= ~0x01;
-					case SDLK_s: sms->joy[0] &= ~0x02;
-					case SDLK_a: sms->joy[0] &= ~0x04;
-					case SDLK_d: sms->joy[0] &= ~0x08;
-					case SDLK_KP_2: sms->joy[0] &= ~0x10;
-					case SDLK_KP_3: sms->joy[0] &= ~0x20;
+					case SDLK_w: sms->joy[0] &= ~0x01; break;
+					case SDLK_s: sms->joy[0] &= ~0x02; break;
+					case SDLK_a: sms->joy[0] &= ~0x04; break;
+					case SDLK_d: sms->joy[0] &= ~0x08; break;
+					case SDLK_KP_2: sms->joy[0] &= ~0x10; break;
+					case SDLK_KP_3: sms->joy[0] &= ~0x20; break;
 					default:
 						break;
 				} break;
@@ -23,12 +23,12 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 			case SDL_KEYUP:
 				switch(ev.key.keysym.sym)
 				{
-					case SDLK_w: sms->joy[0] |= 0x01;
-					case SDLK_s: sms->joy[0] |= 0x02;
-					case SDLK_a: sms->joy[0] |= 0x04;
-					case SDLK_d: sms->joy[0] |= 0x08;
-					case SDLK_KP_2: sms->joy[0] |= 0x10;
-					case SDLK_KP_3: sms->joy[0] |= 0x20;
+					case SDLK_w: sms->joy[0] |= 0x01; break;
+					case SDLK_s: sms->joy[0] |= 0x02; break;
+					case SDLK_a: sms->joy[0] |= 0x04; break;
+					case SDLK_d: sms->joy[0] |= 0x08; break;
+					case SDLK_KP_2: sms->joy[0] |= 0x10; break;
+					case SDLK_KP_3: sms->joy[0] |= 0x20; break;
 					default:
 						break;
 				} break;
@@ -41,6 +41,7 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 		}
 	}
 
+	//printf("OUTPUT: %02X\n", sms->joy[port&1]);
 	return sms->joy[port&1];
 }
 
