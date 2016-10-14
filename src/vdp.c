@@ -80,10 +80,21 @@ static void vdp_do_reg_write(struct VDP *vdp, struct SMS *sms, uint64_t timestam
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
 	printf("REG %X = %02X\n", reg, val);
+
 	vdp->regs[reg] = val;
-	if(reg == 0x0A) {
-		vdp_estimate_line_irq(vdp, sms, timestamp);
+
+	if((vdp->regs[0x01]&0x20) == 0) {
+		vdp->irq_mask &= ~1;
+	} else {
+		vdp->irq_mask |=  1;
 	}
+
+	if((vdp->regs[0x00]&0x10) == 0) {
+		vdp->irq_mask &= ~2;
+	} else {
+		vdp->irq_mask |=  2;
+	}
+	vdp_estimate_line_irq(vdp, sms, timestamp);
 }
 
 void vdp_init(struct VDP *vdp)
@@ -103,6 +114,8 @@ void vdp_init(struct VDP *vdp)
 	vdp->regs[0x07] = 0x00;
 	vdp->regs[0x08] = 0x00;
 	vdp->regs[0x09] = 0x00;
+	vdp->irq_mask = 3;
+	vdp->irq_out = 0;
 }
 
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
@@ -183,9 +196,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 						vdp->line_counter = 0xFF;
 
 					//printf("SLI Reload %02X\n", vdp->line_counter);
-					if((sms->vdp.regs[0x00]&0x10) != 0) {
+					{
 						// Kill it here
-						z80_irq(&sms->z80, sms, 0xFF);
+						//z80_irq(&sms->z80, sms, 0xFF);
+						vdp->irq_out |= 2;
 						//vdp->status |= 0x80;
 						hend = (47-17);
 						timediff -= (hend-hbeg)*2;
@@ -356,7 +370,7 @@ uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
 	vdp_run(vdp, sms, timestamp);
 	vdp->ctrl_latch = 0;
-	sms->z80.in_irq = 0;
+	vdp->irq_out &= ~3;
 	uint8_t ret = vdp->status;
 	vdp->status = 0x00;
 	return ret;

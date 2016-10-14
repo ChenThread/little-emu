@@ -385,6 +385,8 @@ void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
 	// TODO: fetch op using dat
 	assert(z80->im == 1);
 
+	z80->iff1 = 0;
+	z80->iff2 = 0;
 	Z80_ADD_CYCLES(z80, 7);
 	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
 	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
@@ -392,7 +394,6 @@ void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
 	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = 0x0038;
-	z80->in_irq = 1;
 }
 
 void z80_nmi(struct Z80 *z80, struct SMS *sms)
@@ -430,6 +431,21 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				, (unsigned long long)((z80->timestamp-lstamp)/(uint64_t)3)
 				, z80->pc, z80->gpr[RF], z80->gpr[RA], z80->sp);
 		}
+
+		// Check for IRQ
+		if(z80->noni == 0 && z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+			printf("IN_IRQ %d %d %02X %02X %02X %016llX\n"
+				, z80->noni
+				, z80->iff1
+				, sms->vdp.irq_out
+				, sms->vdp.irq_mask
+				, sms->vdp.status
+				, (unsigned long long)z80->timestamp
+				);
+
+			z80_irq(z80, sms, 0xFF);
+		}
+		z80->noni = 0;
 
 		lstamp = z80->timestamp;
 		// Fetch
@@ -603,7 +619,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint8_t nl = z80_fetch_op_x(z80, sms);
 					uint8_t nh = z80_fetch_op_x(z80, sms);
 					uint16_t addr = z80_pair(nh, nl);
-					//printf("ADDR %04X\n", addr);
 					z80_mem_write(sms, z80->timestamp,
 						addr,
 						(uint8_t)(z80->sp>>0));
@@ -640,7 +655,6 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					uint8_t nl = z80_fetch_op_x(z80, sms);
 					uint8_t nh = z80_fetch_op_x(z80, sms);
 					uint16_t addr = z80_pair(nh, nl);
-					//printf("ADDR %04X\n", addr);
 					uint8_t spl = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
@@ -655,6 +669,15 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0x64: case 0x6C:
 				case 0x74: case 0x7C:
 					z80->gpr[RA] = z80_sub8(z80, 0, z80->gpr[RA]);
+					break;
+
+				// Z=5: RETI/RETN
+				case 0x45: case 0x4D:
+				case 0x55: case 0x5D:
+				case 0x65: case 0x6D:
+				case 0x75: case 0x7D:
+					z80->iff1 = z80->iff2;
+					z80_op_ret(z80, sms);
 					break;
 
 				// Z=6: IM x
@@ -2144,6 +2167,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 			case 0xFB: // EI
 				z80->iff1 = 1;
 				z80->iff2 = 1;
+				z80->noni = 1;
 				break;
 
 			// Z=4

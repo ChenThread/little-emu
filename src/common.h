@@ -45,7 +45,7 @@ struct Z80
 	uint8_t i,r,iff1,iff2;
 	uint16_t sp;
 	uint16_t pc;
-	uint8_t halted, im, in_irq;
+	uint8_t halted, im, noni;
 
 	// Tracking state
 	uint64_t timestamp;
@@ -63,6 +63,9 @@ struct VDP
 
 	uint8_t line_counter;
 	uint8_t scx, scy;
+
+	uint8_t irq_out;
+	uint8_t irq_mask;
 	
 	// Tracking state
 	uint64_t timestamp;
