@@ -71,7 +71,10 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 
 	//uint64_t dt = timestamp - sms->timestamp;
 	while(TIME_IN_ORDER(sms->z80.timestamp_end, timestamp)) {
-		z80_run(&(sms->z80), sms, timestamp);
+		sms->z80.timestamp_end = timestamp;
+		vdp_estimate_line_irq(&(sms->vdp), sms, sms->vdp.timestamp);
+		//printf("%016lX %016lX %016lX %016lX %016lX\n", timestamp, sms->z80.timestamp, sms->z80.timestamp_end, sms->vdp.timestamp, sms->vdp.timestamp_end);
+		z80_run(&(sms->z80), sms, sms->z80.timestamp_end);
 		vdp_run(&(sms->vdp), sms, sms->z80.timestamp_end);
 	}
 

@@ -2,12 +2,51 @@
 
 uint8_t frame_data[SCANLINES][342];
 
+void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+{
+	if(!TIME_IN_ORDER(vdp->timestamp, sms->z80.timestamp_end)) {
+		return;
+	}
+
+	// Get beginning + end
+	uint64_t beg_frame = vdp->timestamp/((unsigned long long)(684*SCANLINES));
+	uint32_t beg_toffs = vdp->timestamp%((unsigned long long)(684*SCANLINES));
+	uint64_t end_frame = sms->z80.timestamp_end/((unsigned long long)(684*SCANLINES));
+	uint32_t end_toffs = sms->z80.timestamp_end%((unsigned long long)(684*SCANLINES));
+
+	// Get counters
+	uint32_t beg_vctr = beg_toffs/684;
+	uint32_t beg_hctr = beg_toffs%684;
+	uint32_t end_vctr = end_toffs/684;
+	uint32_t end_hctr = end_toffs%684;
+
+	// Check if it will reload
+	if(beg_frame < end_frame || beg_vctr < 67) {
+		// Register reload happens
+		uint64_t ts = vdp->timestamp - beg_toffs;
+		ts += 684*(67+vdp->regs[0x0A]);
+		ts += 2*(47-17);
+		if(TIME_IN_ORDER(vdp->timestamp, ts)) {
+			if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
+				sms->z80.timestamp_end = ts;
+			}
+		}
+
+	} else {
+		// Register reload does not happen
+		// TODO!
+	}
+}
+
 static void vdp_do_reg_write(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
 	printf("REG %X = %02X\n", reg, val);
 	vdp->regs[reg] = val;
+	if(reg == 0x0A) {
+		vdp_estimate_line_irq(vdp, sms, timestamp);
+	}
 }
 
 void vdp_init(struct VDP *vdp)
@@ -27,11 +66,6 @@ void vdp_init(struct VDP *vdp)
 	vdp->regs[0x07] = 0x00;
 	vdp->regs[0x08] = 0x00;
 	vdp->regs[0x09] = 0x00;
-}
-
-void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
-{
-	// TODO!
 }
 
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
@@ -98,7 +132,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 
 		// Latch line counter
-		if(hbeg <= 47-17 && 47-17 < hend) {
+		if(hbeg < 47-17 && 47-17 <= hend) {
 			if(y < 0 || y >= 193) {
 				vdp->line_counter = vdp->regs[0x0A];
 				if(vdp->line_counter == 0)
@@ -116,7 +150,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 						// Kill it here
 						z80_irq(&sms->z80, sms, 0xFF);
 						//vdp->status |= 0x80;
-						hend = (47-17)+1;
+						hend = (47-17);
 						timediff -= (hend-hbeg)*2;
 						//printf("%016lX\n", timediff);
 						vdp->timestamp_end -= timediff;

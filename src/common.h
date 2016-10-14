@@ -110,6 +110,7 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val);
 void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
 void vdp_init(struct VDP *vdp);
+void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
 
 // z80.c
 void z80_reset(struct Z80 *z80);
