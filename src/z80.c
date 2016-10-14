@@ -2,6 +2,8 @@
 
 static void z80_mem_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uint8_t val)
 {
+	if((sms->memcfg&0x10) != 0) { return; }
+
 	if(addr >= 0xC000) {
 		//printf("%p ram[%04X] = %02X\n", sms, addr&0x1FFF, val);
 		sms->ram[addr&0x1FFF] = val;
@@ -15,6 +17,7 @@ static void z80_mem_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, ui
 static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 {
 	if(addr >= 0xC000) {
+		if((sms->memcfg&0x10) != 0) { return 0xFF; }
 		//printf("%p %02X = ram[%04X]\n", sms, sms->ram[addr&0x1FFF], addr&0x1FFF);
 		return sms->ram[addr&0x1FFF];
 	} else if(addr < 0x0400 || !sms_rom_is_banked) {
@@ -36,11 +39,13 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 	switch(port)
 	{
 		case 0: // Memory control
-			// TODO!
+			printf("!MEM! %02X\n", val);
+			sms->memcfg = val;
 			break;
 
 		case 1: // I/O port control
-			// TODO!
+			printf("!IO! %02X\n", val);
+			sms->iocfg = val;
 			break;
 
 		case 2: // PSG / V counter
@@ -105,9 +110,11 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return vdp_read_ctrl(&sms->vdp, sms, timestamp);
 
 		case 6: // I/O port A
+			if((sms->memcfg&0x04) != 0) { return 0xFF; }
 			return sms_input_fetch(sms, timestamp, 0);
 
 		case 7: // I/O port B
+			if((sms->memcfg&0x04) != 0) { return 0xFF; }
 			return sms_input_fetch(sms, timestamp, 1);
 
 		default:

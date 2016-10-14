@@ -54,6 +54,8 @@ void sms_init(struct SMS *sms)
 	sms->paging[2] = 2; // 0xFFFF
 	sms->joy[0] = 0xFF;
 	sms->joy[1] = 0xFF;
+	sms->memcfg = 0xAB;
+	sms->iocfg = 0xFF;
 	z80_init(&(sms->z80));
 	vdp_init(&(sms->vdp));
 }

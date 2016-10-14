@@ -88,6 +88,8 @@ struct SMS
 	struct PSG psg;
 	uint8_t paging[4];
 	uint8_t joy[2];
+	uint8_t memcfg;
+	uint8_t iocfg;
 
 	uint64_t timestamp;
 	uint64_t timestamp_end;
