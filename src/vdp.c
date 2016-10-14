@@ -9,32 +9,69 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	}
 
 	// Get beginning + end
-	uint64_t beg_frame = vdp->timestamp/((unsigned long long)(684*SCANLINES));
-	uint32_t beg_toffs = vdp->timestamp%((unsigned long long)(684*SCANLINES));
-	uint64_t end_frame = sms->z80.timestamp_end/((unsigned long long)(684*SCANLINES));
-	uint32_t end_toffs = sms->z80.timestamp_end%((unsigned long long)(684*SCANLINES));
+	uint64_t ts_beg = vdp->timestamp;
+	uint64_t ts_end = sms->z80.timestamp_end;
+	//uint64_t beg_frame = ts_beg/((unsigned long long)(684*SCANLINES));
+	uint32_t beg_toffs = ts_beg%((unsigned long long)(684*SCANLINES));
+	//uint64_t end_frame = ts_end/((unsigned long long)(684*SCANLINES));
+	//uint32_t end_toffs = ts_end%((unsigned long long)(684*SCANLINES));
+
+	// Get some timestamps
+	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
+	uint64_t ts_beg_int = ts_beg_frame + (67)*684 + (47-17)*2;
+	uint64_t ts_end_int = ts_beg_frame + (67+192+1)*684 + (47-17)*2;
+
+	// If we are after the frame interrupt, advance
+	if(!TIME_IN_ORDER(ts_beg, ts_end_int)) {
+		ts_beg_frame += 684*SCANLINES;
+		ts_beg_int += 684*SCANLINES;
+		ts_end_int += 684*SCANLINES;
+	}
+
+	// Ensure that we can fire an interrupt at all
+	if(!TIME_IN_ORDER(ts_beg_int, ts_end)) {
+		return;
+	}
+	if(TIME_IN_ORDER(ts_end_int, ts_beg)) {
+		return;
+	}
 
 	// Get counters
-	uint32_t beg_vctr = beg_toffs/684;
-	uint32_t beg_hctr = beg_toffs%684;
-	uint32_t end_vctr = end_toffs/684;
-	uint32_t end_hctr = end_toffs%684;
+	//uint32_t beg_vctr = beg_toffs/684;
+	//uint32_t beg_hctr = beg_toffs%684;
+	//uint32_t end_vctr = end_toffs/684;
+	//uint32_t end_hctr = end_toffs%684;
 
 	// Check if it will reload
-	if(beg_frame < end_frame || beg_vctr < 67) {
+	if(TIME_IN_ORDER(ts_beg, ts_beg_int)) {
 		// Register reload happens
 		uint64_t ts = vdp->timestamp - beg_toffs;
 		ts += 684*(67+vdp->regs[0x0A]);
-		ts += 2*(47-17);
-		if(TIME_IN_ORDER(vdp->timestamp, ts)) {
-			if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
-				sms->z80.timestamp_end = ts;
-			}
+		ts += 2*(47-17+1);
+		if(TIME_IN_ORDER(ts_beg, ts)) {
+		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
+			sms->z80.timestamp_end = ts;
+		}
 		}
 
 	} else {
 		// Register reload does not happen
-		// TODO!
+		// Advance to nearest plausible point
+		uint64_t ts = vdp->timestamp - beg_toffs;
+		ts += 684*67;
+		ts += 2*(47-17+1);
+		while(!TIME_IN_ORDER(ts_beg, ts)) {
+			ts += 684*67;
+		}
+
+		// Advance by line counter
+		ts += 684*(uint32_t)(vdp->line_counter);
+
+		if(TIME_IN_ORDER(ts_beg, ts)) {
+		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
+			sms->z80.timestamp_end = ts;
+		}
+		}
 	}
 }
 

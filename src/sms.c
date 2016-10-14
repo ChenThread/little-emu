@@ -70,6 +70,7 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 	}
 
 	//uint64_t dt = timestamp - sms->timestamp;
+	//sms->ram[0xD23E & 0x1FFF] = 9;
 	while(TIME_IN_ORDER(sms->z80.timestamp_end, timestamp)) {
 		sms->z80.timestamp_end = timestamp;
 		vdp_estimate_line_irq(&(sms->vdp), sms, sms->vdp.timestamp);
