@@ -96,6 +96,7 @@ struct SMS
 	uint8_t joy[2];
 	uint8_t memcfg;
 	uint8_t iocfg;
+	uint8_t hlatch;
 
 	uint64_t timestamp;
 	uint64_t timestamp_end;

@@ -56,6 +56,7 @@ void sms_init(struct SMS *sms)
 	sms->joy[1] = 0xFF;
 	sms->memcfg = 0xAB;
 	sms->iocfg = 0xFF;
+	sms->hlatch = 0x80; // TODO: find out what this is on reset
 	z80_init(&(sms->z80));
 	vdp_init(&(sms->vdp));
 }

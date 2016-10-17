@@ -31,6 +31,17 @@ static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 	}
 }
 
+static bool th_pin_state(uint8_t ioctl)
+{
+	if((ioctl&0x02) == 0 && (ioctl&0x20) == 0 ) {
+		if((ioctl&0x08) == 0 && (ioctl&0x80) == 0 ) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uint8_t val)
 {
 	int port = ((addr>>5)&6)|(addr&1);
@@ -44,7 +55,14 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 			break;
 
 		case 1: // I/O port control
-			printf("!IO! %02X\n", val);
+			//printf("!IO! %02X\n", val);
+
+			// Update latch on HT 0->1
+			if((!th_pin_state(sms->iocfg)) && th_pin_state(val)) {
+				sms->hlatch = (uint8_t)((((timestamp)%(684ULL))-94)>>2);
+			}
+
+			// Write actual thing
 			sms->iocfg = val;
 			break;
 
@@ -101,7 +119,8 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 				-70);
 
 		case 3: // H counter
-			return (uint8_t)(((timestamp%(684ULL))-94)>>2);
+			return sms->hlatch;
+			//return (uint8_t)(((timestamp%(684ULL))-94)>>2);
 
 		case 4: // VDP data
 			return vdp_read_data(&sms->vdp, sms, timestamp);
