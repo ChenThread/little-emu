@@ -55,7 +55,9 @@ struct Z80
 struct VDP
 {
 	// VDP state
+	uint8_t sprd[8][4];
 	uint8_t regs[16];
+	uint8_t sprx[8];
 	uint16_t ctrl_addr;
 	uint8_t ctrl_latch;
 	uint8_t read_buf;
@@ -66,6 +68,7 @@ struct VDP
 
 	uint8_t irq_out;
 	uint8_t irq_mask;
+
 	
 	// Tracking state
 	uint64_t timestamp;

@@ -242,6 +242,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			int py = (y+scy)%(28*8);
 
 			// Calculate sprites
+			// TODO: find actual location for this
 			// TODO: delegate this to later state
 			uint8_t stab[8];
 			int stab_len = 0;

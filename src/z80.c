@@ -394,6 +394,7 @@ void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
 	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = 0x0038;
+	z80->halted = false;
 }
 
 void z80_nmi(struct Z80 *z80, struct SMS *sms)
@@ -406,6 +407,7 @@ void z80_nmi(struct Z80 *z80, struct SMS *sms)
 	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = 0x0066;
+	z80->halted = false;
 }
 
 void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
@@ -417,8 +419,21 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 	// If halted, don't waste time fetching ops
 	if(z80->halted) {
-		z80->timestamp = timestamp;
-		return;
+		if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+			printf("IN_IRQ HALT2 %d %d %02X %02X %02X %016llX\n"
+				, z80->noni
+				, z80->iff1
+				, sms->vdp.irq_out
+				, sms->vdp.irq_mask
+				, sms->vdp.status
+				, (unsigned long long)z80->timestamp
+				);
+
+			z80_irq(z80, sms, 0xFF);
+		} else {
+			z80->timestamp = timestamp;
+			return;
+		}
 	}
 
 	// Run ops
@@ -1359,7 +1374,22 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->timestamp = z80->timestamp_end;
 				}
 				z80->halted = true;
-				return;
+				z80->noni = 0;
+				if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+					printf("IN_IRQ HALT %d %d %02X %02X %02X %016llX\n"
+						, z80->noni
+						, z80->iff1
+						, sms->vdp.irq_out
+						, sms->vdp.irq_mask
+						, sms->vdp.status
+						, (unsigned long long)z80->timestamp
+						);
+
+					z80_irq(z80, sms, 0xFF);
+					continue;
+				} else {
+					return;
+				}
 			}
 
 			int oy = (op>>3)&7;

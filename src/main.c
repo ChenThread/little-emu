@@ -91,6 +91,7 @@ int main(int argc, char *argv[])
 			sms->vdp.status |= 0x80;
 		}
 		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
+		//printf("%04X\n", sms->z80.pc);
 
 		// Draw + upscale
 		void *pixels = NULL;
