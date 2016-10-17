@@ -486,6 +486,80 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				// X=1
 				//
 
+				// Z=0
+				case 0x40: // IN B, (C)
+					z80->gpr[RB] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RB]&0xA8)
+						| z80_parity(z80->gpr[RB])
+						| (z80->gpr[RB] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x48: // IN C, (C)
+					z80->gpr[RC] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RC]&0xA8)
+						| z80_parity(z80->gpr[RC])
+						| (z80->gpr[RC] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x50: // IN D, (C)
+					z80->gpr[RD] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RD]&0xA8)
+						| z80_parity(z80->gpr[RD])
+						| (z80->gpr[RD] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x58: // IN E, (C)
+					z80->gpr[RE] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RE]&0xA8)
+						| z80_parity(z80->gpr[RE])
+						| (z80->gpr[RE] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x60: // IN H, (C)
+					z80->gpr[RH] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RH]&0xA8)
+						| z80_parity(z80->gpr[RH])
+						| (z80->gpr[RH] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x68: // IN L, (C)
+					z80->gpr[RL] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RL]&0xA8)
+						| z80_parity(z80->gpr[RL])
+						| (z80->gpr[RL] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+				case 0x70: { // IN (C)
+					uint8_t tmp = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (tmp&0xA8)
+						| z80_parity(tmp)
+						| (tmp == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+				} break;
+				case 0x78: // IN A, (C)
+					z80->gpr[RA] = z80_io_read(sms, z80->timestamp,
+						z80_pair_pbe(&z80->gpr[RB]));
+					z80->gpr[RF] = (z80->gpr[RF]&0x01)
+						| (z80->gpr[RA]&0xA8)
+						| z80_parity(z80->gpr[RA])
+						| (z80->gpr[RA] == 0 ? 0x40 : 0x00);
+					Z80_ADD_CYCLES(z80, 4);
+					break;
+
 				// Z=1
 				case 0x41: // OUT (C), B
 					z80_io_write(sms, z80->timestamp,
