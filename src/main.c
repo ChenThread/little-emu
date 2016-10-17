@@ -75,49 +75,42 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, SIG_DFL);
 
 	// Run
-	const int pt_VINT = 684*(70+0xC1) + (94-18*2); // for PAL
-	const int pt_VINT_FLAG = 684*(70+0xC1) + (94-15*2); // for PAL
-
 	uint64_t twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
+		sms_run_frame(sms);
 
-		// Run a frame
-		sms_run(sms, sms->timestamp + pt_VINT);
-
-		// VINT
-		if((sms->vdp.regs[0x01]&0x20) != 0) {
-			//z80_irq(&sms->z80, sms, 0xFF);
-			sms->vdp.irq_out |= 1;
-			sms->vdp.status |= 0x80;
-		}
-		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
-		//printf("%04X\n", sms->z80.pc);
-
-		// Draw + upscale
-		void *pixels = NULL;
-		int pitch = 0;
-		SDL_LockTexture(texture, NULL, &pixels, &pitch);
-		for(int y = 0; y < SCANLINES; y++) {
-			uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
-			for(int x = 0; x < 342; x++) {
-				uint32_t v = frame_data[y][x];
-				uint32_t r = ((v>>0)&3)*0x55;
-				uint32_t g = ((v>>2)&3)*0x55;
-				uint32_t b = ((v>>4)&3)*0x55;
-				pp[x] = (b<<24)|(g<<16)|(r<<8);
-			}
-		}
-		SDL_UnlockTexture(texture);
-		SDL_RenderCopy(renderer, texture, NULL, NULL);
-
-		//sms_copy(&sms_prev, &sms_current);
-		// Update
-		SDL_UpdateWindowSurface(window);
 		uint64_t tnow = time_now();
 		twait += 20000;
-		if(TIME_IN_ORDER(tnow, twait)) {
-			usleep((useconds_t)(twait-tnow));
+		if(sms->no_draw) {
+			twait = tnow;
+		} else {
+			if(TIME_IN_ORDER(tnow, twait)) {
+				usleep((useconds_t)(twait-tnow));
+			}
+		}
+
+		if(!sms->no_draw)
+		{
+			// Draw + upscale
+			void *pixels = NULL;
+			int pitch = 0;
+			SDL_LockTexture(texture, NULL, &pixels, &pitch);
+			for(int y = 0; y < SCANLINES; y++) {
+				uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
+				for(int x = 0; x < 342; x++) {
+					uint32_t v = frame_data[y][x];
+					uint32_t r = ((v>>0)&3)*0x55;
+					uint32_t g = ((v>>2)&3)*0x55;
+					uint32_t b = ((v>>4)&3)*0x55;
+					pp[x] = (b<<24)|(g<<16)|(r<<8);
+				}
+			}
+			SDL_UnlockTexture(texture);
+			SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+			// Update
+			SDL_UpdateWindowSurface(window);
 		}
 	}
 	

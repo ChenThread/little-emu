@@ -79,7 +79,7 @@ static void vdp_do_reg_write(struct VDP *vdp, struct SMS *sms, uint64_t timestam
 {
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
-	printf("REG %X = %02X\n", reg, val);
+	//printf("REG %X = %02X\n", reg, val);
 
 	vdp->regs[reg] = val;
 
@@ -224,7 +224,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
-		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
+		if(sms->no_draw) {
+			// Do nothing
+
+		} else if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
 			if(y < -54 || y >= 192+48) {
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {

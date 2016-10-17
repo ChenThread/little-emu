@@ -439,6 +439,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 	// If halted, don't waste time fetching ops
 	if(z80->halted) {
 		if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+			/*
 			printf("IN_IRQ HALT2 %d %d %02X %02X %02X %016llX\n"
 				, z80->noni
 				, z80->iff1
@@ -447,6 +448,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				, sms->vdp.status
 				, (unsigned long long)z80->timestamp
 				);
+			*/
 
 			z80_irq(z80, sms, 0xFF);
 		} else {
@@ -468,6 +470,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 		// Check for IRQ
 		if(z80->noni == 0 && z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+			/*
 			printf("IN_IRQ %d %d %02X %02X %02X %016llX\n"
 				, z80->noni
 				, z80->iff1
@@ -476,6 +479,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				, sms->vdp.status
 				, (unsigned long long)z80->timestamp
 				);
+			*/
 
 			z80_irq(z80, sms, 0xFF);
 		}
@@ -1469,6 +1473,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				z80->halted = true;
 				z80->noni = 0;
 				if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
+					/*
 					printf("IN_IRQ HALT %d %d %02X %02X %02X %016llX\n"
 						, z80->noni
 						, z80->iff1
@@ -1477,6 +1482,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						, sms->vdp.status
 						, (unsigned long long)z80->timestamp
 						);
+					*/
 
 					z80_irq(z80, sms, 0xFF);
 					continue;

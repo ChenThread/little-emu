@@ -98,6 +98,7 @@ struct SMS
 	uint8_t iocfg;
 	uint8_t hlatch;
 
+	bool no_draw;
 	uint64_t timestamp;
 	uint64_t timestamp_end;
 };
@@ -110,6 +111,7 @@ uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port);
 void sms_init(struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMS *sms, uint64_t timestamp);
+void sms_run_frame(struct SMS *sms);
 
 // vdp.c
 extern uint8_t frame_data[SCANLINES][342];
