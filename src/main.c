@@ -1,25 +1,25 @@
 #include "common.h"
 
-uint8_t sms_rom[512*1024];
-bool sms_rom_is_banked = false;
-
-struct SMS sms_current;
-struct SMS sms_prev;
+void *botlib = NULL;
+void (*botlib_update)(void) = NULL;
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
 
-uint64_t time_now(void)
-{
-	struct timeval ts;
-	gettimeofday(&ts, NULL);
+/*
+Sonic 1:
+0x13FD = X
+0x1400 = Y
+0x1403 = Xvel
+0x1406 = Yvel
+*/
 
-	uint64_t sec = ts.tv_sec;
-	uint64_t usec = ts.tv_usec;
-	sec *= 1000000ULL;
-	usec += sec;
-	return usec;
+void bot_update()
+{
+	if(botlib_update != NULL) {
+		botlib_update();
+	}
 }
 
 int main(int argc, char *argv[])
@@ -30,6 +30,13 @@ int main(int argc, char *argv[])
 	memset(sms_rom, 0xFF, sizeof(sms_rom));
 	int rsiz = fread(sms_rom, 1, sizeof(sms_rom), fp);
 	assert(rsiz > 0);
+
+	// Load bot if available
+	if(argc > 2) {
+		botlib = SDL_LoadObject(argv[2]);
+		assert(botlib != NULL);
+		botlib_update = SDL_LoadFunction(botlib, "bot_update");
+	}
 
 	// TODO: handle other sizes
 	printf("ROM size: %08X\n", rsiz);
@@ -54,7 +61,6 @@ int main(int argc, char *argv[])
 
 	// Set up SMS
 	sms_init(&sms_current);
-	sms_copy(&sms_prev, &sms_current);
 
 	// Set up SDL
 	SDL_Init(SDL_INIT_VIDEO);
@@ -75,9 +81,10 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, SIG_DFL);
 
 	// Run
-	uint64_t twait = time_now();
+	twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
+		bot_update();
 		sms_run_frame(sms);
 
 		uint64_t tnow = time_now();
