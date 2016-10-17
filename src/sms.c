@@ -59,6 +59,8 @@ void sms_init(struct SMS *sms)
 	sms->hlatch = 0x80; // TODO: find out what this is on reset
 	z80_init(&(sms->z80));
 	vdp_init(&(sms->vdp));
+	//sms->z80.timestamp = 1;
+	//sms->vdp.timestamp = 0;
 }
 
 void sms_copy(struct SMS *dest, struct SMS *src)

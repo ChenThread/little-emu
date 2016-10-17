@@ -59,7 +59,7 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 
 			// Update latch on HT 0->1
 			if((!th_pin_state(sms->iocfg)) && th_pin_state(val)) {
-				sms->hlatch = (uint8_t)((((timestamp)%(684ULL))-94)>>2);
+				sms->hlatch = (uint8_t)((((((timestamp)%(684ULL))-94+1)>>2)));
 			}
 
 			// Write actual thing
@@ -115,7 +115,7 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 
 		case 2: // V counter
 			return (uint8_t)(
-				((timestamp/(684ULL))%((unsigned long long)SCANLINES))
+				(((timestamp+(94-16))/(684ULL))%((unsigned long long)SCANLINES))
 				-70);
 
 		case 3: // H counter

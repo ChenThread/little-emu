@@ -18,8 +18,8 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	// Get some timestamps
 	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
-	uint64_t ts_beg_int = ts_beg_frame + (67)*684 + (47-17)*2;
-	uint64_t ts_end_int = ts_beg_frame + (67+192+1)*684 + (47-17)*2;
+	uint64_t ts_beg_int = ts_beg_frame + (70)*684 + (47-17)*2;
+	uint64_t ts_end_int = ts_beg_frame + (70+192+1)*684 + (47-17)*2;
 
 	// If we are after the frame interrupt, advance
 	if(!TIME_IN_ORDER(ts_beg, ts_end_int)) {
@@ -46,7 +46,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	if(TIME_IN_ORDER(ts_beg, ts_beg_int)) {
 		// Register reload happens
 		uint64_t ts = vdp->timestamp - beg_toffs;
-		ts += 684*(67+vdp->regs[0x0A]);
+		ts += 684*(70+vdp->regs[0x0A]);
 		ts += 2*(47-17+1);
 		if(TIME_IN_ORDER(ts_beg, ts)) {
 		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
@@ -58,10 +58,10 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		// Register reload does not happen
 		// Advance to nearest plausible point
 		uint64_t ts = vdp->timestamp - beg_toffs;
-		ts += 684*67;
+		ts += 684*70;
 		ts += 2*(47-17+1);
 		while(!TIME_IN_ORDER(ts_beg, ts)) {
-			ts += 684*67;
+			ts += 684*70;
 		}
 
 		// Advance by line counter
@@ -166,7 +166,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);
-		int y = vctr - 67;
+		int y = vctr - 70;
 
 		// Latch H-scroll
 		if(hbeg <= 47-17 && 47-17 < hend) {
