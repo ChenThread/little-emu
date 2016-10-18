@@ -1,6 +1,8 @@
 #include "common.h"
 
 uint8_t frame_data[SCANLINES][342];
+static const uint64_t HSC_OFFS = (47-17);
+static const uint64_t LINT_OFFS = (47-15);
 
 void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
@@ -18,8 +20,8 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	// Get some timestamps
 	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
-	uint64_t ts_beg_int = ts_beg_frame + (70)*684 + (47-17)*2;
-	uint64_t ts_end_int = ts_beg_frame + (70+192+1)*684 + (47-17)*2;
+	uint64_t ts_beg_int = ts_beg_frame + (70)*684 + 2*LINT_OFFS;
+	uint64_t ts_end_int = ts_beg_frame + (70+192+1)*684 + 2*LINT_OFFS;
 
 	// If we are after the frame interrupt, advance
 	if(!TIME_IN_ORDER(ts_beg, ts_end_int)) {
@@ -47,7 +49,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		// Register reload happens
 		uint64_t ts = vdp->timestamp - beg_toffs;
 		ts += 684*(70+vdp->regs[0x0A]);
-		ts += 2*(47-17+1);
+		ts += 2*LINT_OFFS+2;
 		if(TIME_IN_ORDER(ts_beg, ts)) {
 		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
 			sms->z80.timestamp_end = ts;
@@ -59,9 +61,9 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		// Advance to nearest plausible point
 		uint64_t ts = vdp->timestamp - beg_toffs;
 		ts += 684*70;
-		ts += 2*(47-17+1);
+		ts += 2*LINT_OFFS+2;
 		while(!TIME_IN_ORDER(ts_beg, ts)) {
-			ts += 684*70;
+			ts += 684;
 		}
 
 		// Advance by line counter
@@ -169,7 +171,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		int y = vctr - 70;
 
 		// Latch H-scroll
-		if(hbeg <= 47-17 && 47-17 < hend) {
+		if(hbeg <= HSC_OFFS && HSC_OFFS < hend) {
 			vdp->scx = vdp->regs[0x08];
 			scx = (-vdp->scx)&0xFF;
 
@@ -182,11 +184,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 
 		// Latch line counter
-		if(hbeg < 47-17 && 47-17 <= hend) {
-			if(y < 0 || y >= 193) {
+		if(hbeg < LINT_OFFS && LINT_OFFS <= hend) {
+			if(y < 0 || y > 192) {
 				vdp->line_counter = vdp->regs[0x0A];
-				if(vdp->line_counter == 0)
-					vdp->line_counter = 0xFF;
+				// HACK
+				//if(vdp->line_counter == 0) { vdp->line_counter = 0xFF; }
 				//printf("SLI Reload %02X\n", vdp->line_counter);
 			} else {
 				//printf("SLI dec %02X [%0d %0d]\n", vdp->line_counter, vctr_beg, vctr_end);
