@@ -280,6 +280,31 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 
 		// Check for collisions
+		/*
+		v: earliest possible collision point
+		w: latest possible collision point
+
+		Unless sx0 == sx1 these are optimistic,
+		but anything outside of that range will not collide anyway.
+
+		If (sx0-sx1) == +1:
+		[If sx0 == sx1+1:]
+		-------- -------- -v------ w-------
+		00000000 00000000 0aaaaaaa a0000000
+		00000000 00000000 bbbbbbbb 00000000
+		If (sx0-sx1) == -1:
+		[If sx0 == sx1-1:]
+		-------- -------- -v------ w-------
+		00000000 00000000 0aaaaaaa a0000000
+		00000000 00000000 00bbbbbb bb000000
+
+		v,w fixed according to sdetwide
+		TODO: make this work in 2x mag mode (i.e. sdetwide != 8)
+
+		*/
+		uint32_t sw = sdetwide-1;
+		int cbeg = lborder+47;
+		if(cbeg > hbeg) { cbeg = hbeg; }
 		if((vdp->regs[0x01]&0x40)!=0){
 		for(int i = 0; i < stab_len && i < 8; i++) {
 			uint16_t sx0 = (uint16_t)(sp_tab_p[stab[i]*2+0]);
@@ -288,11 +313,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			uint16_t sy0 = 0xFF&(uint16_t)(y-sp_tab_y[stab[i]]);
 			uint8_t *sp0 = &sp_tiles[(sn0*8+sy0)*4];
 			uint32_t sd0 = sp0[0]|sp0[1]|sp0[2]|sp0[3];
-			sd0 <<= sdetwide-1;
+			sd0 <<= sw;
 			for(int j = i+1; j < stab_len && j < 8; j++) {
 				uint16_t sx1 = (uint16_t)(sp_tab_p[stab[j]*2+0]);
 				sx1 += sxoffs;
-				uint16_t dsx = sx1-sx0+(sdetwide-1);
+				uint16_t dsx = sx0-sx1+sw;
 				if(dsx < sdetwide*2-1) {
 					// Potential collision, need to read tile data
 					uint16_t sn1 = smask&(uint16_t)sp_tab_p[stab[j]*2+1];
@@ -300,11 +325,29 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					uint8_t *sp1 = &sp_tiles[(sn1*8+sy1)*4];
 					uint32_t sd1 = sp1[0]|sp1[1]|sp1[2]|sp1[3];
 					sd1 <<= dsx;
-					if((sd0&sd1) != 0) {
+					uint32_t match = sd0&sd1;
+					if((match) != 0) {
 						// Calculate exact pixel
-						// TODO!
-						int colx = sx1;
-						if(hbeg < colx+47 && colx+47 <= hend) {
+						int cx = sx0+47;
+
+						if(false) {}
+						else if((match&(0x80<<sw))!=0 && cbeg<cx+0){ cx += 0;}
+						else if((match&(0x40<<sw))!=0 && cbeg<cx+1){ cx += 1;}
+						else if((match&(0x20<<sw))!=0 && cbeg<cx+2){ cx += 2;}
+						else if((match&(0x10<<sw))!=0 && cbeg<cx+3){ cx += 3;}
+						else if((match&(0x08<<sw))!=0 && cbeg<cx+4){ cx += 4;}
+						else if((match&(0x04<<sw))!=0 && cbeg<cx+5){ cx += 5;}
+						else if((match&(0x02<<sw))!=0 && cbeg<cx+6){ cx += 6;}
+						else if((match&(0x01<<sw))!=0 && cbeg<cx+7){ cx += 7;}
+						else { continue; }
+
+						// Ensure collision point is within bounds
+						int cx0 = cx-47;
+						if(cx0 >= 256) { continue; }
+
+						// TODO: handle inter-timestep cases
+						if(hbeg < cx && cx <= hend) {
+							//printf("COL %d %d\n", colx0, colx1);
 							vdp->status |= 0x20; // COL
 							break;
 						}

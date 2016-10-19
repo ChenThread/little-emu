@@ -133,6 +133,7 @@ void z80_init(struct Z80 *z80);
 void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat);
 void z80_nmi(struct Z80 *z80, struct SMS *sms);
 void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp);
+extern void (*sms_hook_poll_input)(struct SMS *sms, int controller, uint64_t timestamp);
 
 // main.c
 extern struct SMS sms_current;

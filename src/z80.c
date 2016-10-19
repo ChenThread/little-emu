@@ -1,5 +1,7 @@
 #include "common.h"
 
+void (*sms_hook_poll_input)(struct SMS *sms, int controller, uint64_t timestamp) = NULL;
+
 static void z80_mem_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uint8_t val)
 {
 	if((sms->memcfg&0x10) != 0) { return; }
@@ -139,10 +141,16 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 
 		case 6: // I/O port A
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
+			if(sms_hook_poll_input != NULL) {
+				sms_hook_poll_input(sms, 0, timestamp);
+			}
 			return sms->joy[0];
 
 		case 7: // I/O port B
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
+			if(sms_hook_poll_input != NULL) {
+				sms_hook_poll_input(sms, 1, timestamp);
+			}
 			return sms->joy[1];
 
 		default:

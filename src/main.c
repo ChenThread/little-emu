@@ -1,6 +1,7 @@
 #include "common.h"
 
 void *botlib = NULL;
+void (*botlib_init)(void) = NULL;
 void (*botlib_update)(void) = NULL;
 
 SDL_Window *window = NULL;
@@ -83,6 +84,7 @@ int main(int argc, char *argv[])
 	if(argc > 2) {
 		botlib = SDL_LoadObject(argv[2]);
 		assert(botlib != NULL);
+		botlib_init = SDL_LoadFunction(botlib, "bot_init");
 		botlib_update = SDL_LoadFunction(botlib, "bot_update");
 	}
 
@@ -129,6 +131,10 @@ int main(int argc, char *argv[])
 	signal(SIGTERM, SIG_DFL);
 
 	// Run
+	if(botlib_init != NULL) {
+		botlib_init();
+	}
+
 	twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
