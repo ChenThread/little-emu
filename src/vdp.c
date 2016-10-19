@@ -252,7 +252,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
-		// Read sprite data
+		// Read sprite table
 		// TODO: latch this into VDP state
 		uint8_t stab[8];
 		int stab_len = 0;
@@ -273,6 +273,41 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				}
 				stab[stab_len++] = i;
 			}
+		}
+
+		// Check for collisions
+		if((vdp->regs[0x01]&0x40)!=0){
+		for(int i = 0; i < stab_len && i < 8; i++) {
+			uint16_t sx0 = (uint16_t)(sp_tab_p[stab[i]*2+0]);
+			sx0 += sxoffs;
+			uint16_t sn0 = smask&(uint16_t)sp_tab_p[stab[i]*2+1];
+			uint16_t sy0 = 0xFF&(uint16_t)(y-sp_tab_y[stab[i]]);
+			uint8_t *sp0 = &sp_tiles[(sn0*8+sy0)*4];
+			uint32_t sd0 = sp0[0]|sp0[1]|sp0[2]|sp0[3];
+			sd0 <<= sdetwide-1;
+			for(int j = i+1; j < stab_len && j < 8; j++) {
+				uint16_t sx1 = (uint16_t)(sp_tab_p[stab[j]*2+0]);
+				sx1 += sxoffs;
+				uint16_t dsx = sx1-sx0+(sdetwide-1);
+				if(dsx < sdetwide*2-1) {
+					// Potential collision, need to read tile data
+					uint16_t sn1 = smask&(uint16_t)sp_tab_p[stab[j]*2+1];
+					uint16_t sy1 = 0xFF&(uint16_t)(y-sp_tab_y[stab[j]]);
+					uint8_t *sp1 = &sp_tiles[(sn1*8+sy1)*4];
+					uint32_t sd1 = sp1[0]|sp1[1]|sp1[2]|sp1[3];
+					sd1 <<= dsx;
+					if((sd0&sd1) != 0) {
+						// Calculate exact pixel
+						// TODO!
+						int colx = sx1;
+						if(hbeg < colx+47 && colx+47 <= hend) {
+							vdp->status |= 0x20; // COL
+							break;
+						}
+					}
+				}
+			}
+		}
 		}
 
 		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
@@ -375,12 +410,8 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 								| 0;
 
 							if(ns != 0) {
-								if(s != 0) {
-									// TODO: get this working in no_draw mode
-									//vdp->status |= 0x20; // COL
-									break;
-								}
 								s = ns|0x10;
+								break;
 							}
 						}
 					}
