@@ -3,6 +3,8 @@
 uint8_t frame_data[SCANLINES][342];
 static const uint64_t HSC_OFFS = (47-17);
 static const uint64_t LINT_OFFS = (47-17);
+static const uint64_t SLATCH_OFFS = (47-15);
+static const uint64_t VINT_OFFS = (47-18);
 
 void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {
@@ -106,6 +108,7 @@ void vdp_init(struct VDP *vdp)
 	vdp->ctrl_latch = 0;
 	vdp->read_buf = 0x00;
 	vdp->status = 0x00;
+	vdp->status_latches = 0x00;
 	vdp->regs[0x00] = 0x26;
 	vdp->regs[0x01] = 0xE0;
 	vdp->regs[0x02] = 0xFF;
@@ -183,6 +186,22 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
+		// Set vblank IRQ
+		if(y == 0xC1 && (sms->vdp.regs[0x01]&0x20) != 0) {
+			if(hbeg < VINT_OFFS && VINT_OFFS <= hend) {
+				sms->vdp.irq_out |= 1;
+			}
+		}
+
+		// Latch status flags
+		if(hbeg <= SLATCH_OFFS && SLATCH_OFFS < hend) {
+			if(y == 0xC1 && (sms->vdp.regs[0x01]&0x20) != 0) {
+				vdp->status_latches |= 0x80;
+			}
+			vdp->status |= vdp->status_latches;
+			vdp->status_latches = 0;
+		}
+
 		// Latch line counter
 		if(hbeg < LINT_OFFS && LINT_OFFS <= hend) {
 			if(y < 0 || y > 192) {
@@ -237,6 +256,27 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					frame_data[vctr][hctr] = 0x00;
 				}
 			} else {
+				if(y >= 0 && y < 192) {
+					// Overflow test
+					int stab_len = 0;
+					for(int i = 0; i < 64; i++) {
+						// End of list marker
+						// XXX: only for 192-line mode!
+						if(sp_tab_y[i] == 0xD0) {
+							break;
+						}
+
+						uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
+						if(sy < sdethigh) {
+							if(stab_len >= 8) {
+								vdp->status_latches |= 0x40; // OVR
+								break;
+							}
+							stab_len++;
+						}
+					}
+				}
+
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
@@ -260,10 +300,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 				uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
 				if(sy < sdethigh) {
-					stab[stab_len++] = i;
 					if(stab_len >= 8) {
+						vdp->status_latches |= 0x40; // OVR
 						break;
 					}
+					stab[stab_len++] = i;
 				}
 			}
 

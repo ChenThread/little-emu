@@ -111,19 +111,10 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 void sms_run_frame(struct SMS *sms)
 {
 	const int pt_VINT = 684*(70+0xC1) + (94-18*2); // for PAL
-	//const int pt_VINT_FLAG = 684*(70+0xC1) + (94-15*2); // for PAL
 
 	// Run a frame
 	sms_run(sms, sms->timestamp + pt_VINT);
-
-	// VINT
-	if((sms->vdp.regs[0x01]&0x20) != 0) {
-		//z80_irq(&sms->z80, sms, 0xFF);
-		sms->vdp.irq_out |= 1;
-		sms->vdp.status |= 0x80;
-	}
 	sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
-	//printf("%04X\n", sms->z80.pc);
 
 	//sms_copy(&sms_prev, &sms_current);
 }
