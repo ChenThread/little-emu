@@ -252,6 +252,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 		if(sms->no_draw) {
 			// Do nothing
+			// TODO: fast sprite collision / overflow checks
 
 		} else if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
 			if(y < -54 || y >= 192+48) {
@@ -386,16 +387,19 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 							uint8_t s1 = sp[sy+1];
 							uint8_t s2 = sp[sy+2];
 							uint8_t s3 = sp[sy+3];
-							s = 0
+							uint8_t ns = 0
 								| (((s0>>sx)&1)<<0)
 								| (((s1>>sx)&1)<<1)
 								| (((s2>>sx)&1)<<2)
 								| (((s3>>sx)&1)<<3)
 								| 0;
 
-							if(s != 0) {
-								s |= 0x10;
-								break;
+							if(ns != 0) {
+								if(s != 0) {
+									vdp->status |= 0x20; // COL
+									break;
+								}
+								s = ns|0x10;
 							}
 						}
 					}
