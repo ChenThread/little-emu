@@ -2,7 +2,7 @@
 
 uint8_t frame_data[SCANLINES][342];
 static const uint64_t HSC_OFFS = (47-17);
-static const uint64_t LINT_OFFS = (47-15);
+static const uint64_t LINT_OFFS = (47-17);
 
 void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 {

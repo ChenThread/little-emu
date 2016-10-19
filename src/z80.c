@@ -59,7 +59,11 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 
 			// Update latch on HT 0->1
 			if((!th_pin_state(sms->iocfg)) && th_pin_state(val)) {
-				sms->hlatch = (uint8_t)((((((timestamp)%(684ULL))-94+1)>>2)));
+				uint32_t h = timestamp%(684ULL);
+				h -= 94;
+				h += 2;
+				h >>= 2;
+				sms->hlatch = h;
 			}
 
 			// Write actual thing
@@ -114,13 +118,18 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return 0xFF;
 
 		case 2: // V counter
-			return (uint8_t)(
-				(((timestamp+(94-16))/(684ULL))%((unsigned long long)SCANLINES))
-				-70);
+			{
+				uint64_t v = timestamp;
+				v -= (94-16*2);
+				v += 684ULL*(unsigned long long)SCANLINES;
+				v /= 684ULL;
+				v %= (unsigned long long)SCANLINES;
+				v -= 70;
+				return v;
+			}
 
 		case 3: // H counter
 			return sms->hlatch;
-			//return (uint8_t)(((timestamp%(684ULL))-94)>>2);
 
 		case 4: // VDP data
 			return vdp_read_data(&sms->vdp, sms, timestamp);
