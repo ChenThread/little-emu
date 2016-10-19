@@ -63,7 +63,7 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 
 void sms_run_frame(struct SMS *sms)
 {
-	const int pt_VINT = 684*(70+0xC1) + (94-18*2); // for PAL
+	const int pt_VINT = 684*(FRAME_START_Y+0xC1) + (94-18*2);
 
 	// Run a frame
 	sms_run(sms, sms->timestamp + pt_VINT);

@@ -1,5 +1,9 @@
 #include <stdint.h>
 
+#ifndef USE_NTSC
+#define USE_NTSC 0
+#endif
+
 #define TIME_IN_ORDER(t0, t1) (((t0) - (t1)) > ((t1) - (t0)))
 
 #if 0
@@ -21,7 +25,19 @@
 #define RF 6
 #define RA 7
 
+#if (USE_NTSC) != 0
+#define SCANLINES 262
+#define FRAME_START_Y 43
+#define FRAME_BORDER_TOP 27
+#define FRAME_BORDER_BOTTOM 24
+#define FRAME_WAIT (1000000/60)
+#else
 #define SCANLINES 313
+#define FRAME_START_Y 70
+#define FRAME_BORDER_TOP 54
+#define FRAME_BORDER_BOTTOM 48
+#define FRAME_WAIT (1000000/50)
+#endif
 
 struct Z80
 {

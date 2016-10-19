@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 		assert(memcmp(&sms_ndsim, sms, sizeof(struct SMS)) == 0);
 
 		uint64_t tnow = time_now();
-		twait += 20000;
+		twait += FRAME_WAIT;
 		if(sms->no_draw) {
 			twait = tnow;
 		} else {

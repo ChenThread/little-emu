@@ -22,8 +22,8 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	// Get some timestamps
 	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
-	uint64_t ts_beg_int = ts_beg_frame + (70)*684 + 2*LINT_OFFS;
-	uint64_t ts_end_int = ts_beg_frame + (70+192+1)*684 + 2*LINT_OFFS;
+	uint64_t ts_beg_int = ts_beg_frame + (FRAME_START_Y)*684 + 2*LINT_OFFS;
+	uint64_t ts_end_int = ts_beg_frame + (FRAME_START_Y+192+1)*684 + 2*LINT_OFFS;
 
 	// If we are after the frame interrupt, advance
 	if(!TIME_IN_ORDER(ts_beg, ts_end_int)) {
@@ -50,7 +50,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	if(TIME_IN_ORDER(ts_beg, ts_beg_int)) {
 		// Register reload happens
 		uint64_t ts = vdp->timestamp - beg_toffs;
-		ts += 684*(70+vdp->regs[0x0A]);
+		ts += 684*(FRAME_START_Y+vdp->regs[0x0A]);
 		ts += 2*LINT_OFFS+2;
 		if(TIME_IN_ORDER(ts_beg, ts)) {
 		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
@@ -62,7 +62,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		// Register reload does not happen
 		// Advance to nearest plausible point
 		uint64_t ts = vdp->timestamp - beg_toffs;
-		ts += 684*70;
+		ts += 684*FRAME_START_Y;
 		ts += 2*LINT_OFFS+2;
 		while(!TIME_IN_ORDER(ts_beg, ts)) {
 			ts += 684;
@@ -173,7 +173,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);
-		int y = vctr - 70;
+		int y = vctr - FRAME_START_Y;
 
 		// Latch H-scroll
 		if(hbeg <= HSC_OFFS && HSC_OFFS < hend) {
@@ -311,7 +311,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 
 		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
-			if(y < -54 || y >= 192+48) {
+			if(y < -FRAME_BORDER_TOP || y >= 192+FRAME_BORDER_BOTTOM) {
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);

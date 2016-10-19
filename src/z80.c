@@ -124,7 +124,7 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 				v += 684ULL*(unsigned long long)SCANLINES;
 				v /= 684ULL;
 				v %= (unsigned long long)SCANLINES;
-				v -= 70;
+				v -= FRAME_START_Y;
 				return v;
 			}
 
