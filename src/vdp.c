@@ -263,11 +263,15 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				break;
 			}
 
-			uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
+			uint8_t sy = (uint8_t)(y-(sp_tab_y[i]+1));
 			if(sy < sdethigh) {
 				if(stab_len >= 8) {
 					if(y >= 0 && y < 192) {
-						vdp->status_latches |= 0x40; // OVR
+						if(hbeg <= SLATCH_OFFS && SLATCH_OFFS < hend) {
+							vdp->status |= 0x40; // OVR
+						} else {
+							vdp->status_latches |= 0x40; // OVR
+						}
 					}
 					break;
 				}
@@ -394,7 +398,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 							// Read tile
 							uint16_t sn = (uint16_t)sp_tab_p[j*2+1];
 							sn &= smask;
-							uint16_t sy = (uint16_t)(y-sp_tab_y[j]);
+							uint16_t sy = (uint16_t)(y-(uint16_t)(uint8_t)(sp_tab_y[j]+1));
 							sy &= 0xFF;
 							uint8_t *sp = &sp_tiles[sn*4*8];
 							sx >>= sshift;
