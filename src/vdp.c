@@ -321,7 +321,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = bcol;
+					frame_data[vctr][hctr] = (
+						hctr >= 47-13 && hctr < 47+256+15
+						? bcol
+						: 0x00);
 				}
 			}
 		} else if(sms->no_draw) {
@@ -427,7 +430,10 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					//frame_data[vctr][hctr] = v&0x1F;
 				} else {
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = bcol;
+					frame_data[vctr][hctr] = (
+						hctr >= 47-13 && hctr < 47+256+15
+						? bcol
+						: 0x00);
 				}
 			}
 		}
