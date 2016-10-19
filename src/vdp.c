@@ -168,6 +168,8 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	//vdp->regs[0x05] = 0xFF;
 	//vdp->regs[0x06] = 0xFF;
 
+	// Do overflow check
+
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);
@@ -250,16 +252,14 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
-		if(sms->no_draw) {
-			// Do nothing
-			// TODO: fast sprite collision / overflow checks
-
-		} else if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
+		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0 || sms->no_draw) {
 			if(y < -54 || y >= 192+48) {
 				assert(vctr >= 0 && vctr < SCANLINES);
-				for(int hctr = hbeg; hctr < hend; hctr++) {
-					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = 0x00;
+				if(!(sms->no_draw)) {
+					for(int hctr = hbeg; hctr < hend; hctr++) {
+						assert(hctr >= 0 && hctr < 342);
+						frame_data[vctr][hctr] = 0x00;
+					}
 				}
 			} else {
 				if(y >= 0 && y < 192) {
@@ -283,10 +283,12 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					}
 				}
 
-				assert(vctr >= 0 && vctr < SCANLINES);
-				for(int hctr = hbeg; hctr < hend; hctr++) {
-					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = bcol;
+				if(!(sms->no_draw)) {
+					assert(vctr >= 0 && vctr < SCANLINES);
+					for(int hctr = hbeg; hctr < hend; hctr++) {
+						assert(hctr >= 0 && hctr < 342);
+						frame_data[vctr][hctr] = bcol;
+					}
 				}
 			}
 		} else {

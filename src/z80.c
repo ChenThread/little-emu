@@ -139,11 +139,11 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 
 		case 6: // I/O port A
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
-			return sms_input_fetch(sms, timestamp, 0);
+			return sms->joy[0];
 
 		case 7: // I/O port B
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
-			return sms_input_fetch(sms, timestamp, 1);
+			return sms->joy[1];
 
 		default:
 			assert(!"UNREACHABLE");

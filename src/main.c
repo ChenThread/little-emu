@@ -22,6 +22,54 @@ void bot_update()
 	}
 }
 
+uint8_t input_fetch(struct SMS *sms, uint64_t timestamp, int port)
+{
+	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
+
+	SDL_Event ev;
+	if(!sms->no_draw) {
+	while(SDL_PollEvent(&ev)) {
+		switch(ev.type) {
+			case SDL_KEYDOWN:
+				switch(ev.key.keysym.sym)
+				{
+					case SDLK_w: sms->joy[0] &= ~0x01; break;
+					case SDLK_s: sms->joy[0] &= ~0x02; break;
+					case SDLK_a: sms->joy[0] &= ~0x04; break;
+					case SDLK_d: sms->joy[0] &= ~0x08; break;
+					case SDLK_KP_2: sms->joy[0] &= ~0x10; break;
+					case SDLK_KP_3: sms->joy[0] &= ~0x20; break;
+					default:
+						break;
+				} break;
+
+			case SDL_KEYUP:
+				switch(ev.key.keysym.sym)
+				{
+					case SDLK_w: sms->joy[0] |= 0x01; break;
+					case SDLK_s: sms->joy[0] |= 0x02; break;
+					case SDLK_a: sms->joy[0] |= 0x04; break;
+					case SDLK_d: sms->joy[0] |= 0x08; break;
+					case SDLK_KP_2: sms->joy[0] |= 0x10; break;
+					case SDLK_KP_3: sms->joy[0] |= 0x20; break;
+					default:
+						break;
+				} break;
+
+			case SDL_QUIT:
+				exit(0);
+				break;
+			default:
+				break;
+		}
+	}
+	}
+
+	//printf("OUTPUT: %02X\n", sms->joy[port&1]);
+	return sms->joy[port&1];
+}
+
+
 int main(int argc, char *argv[])
 {
 	assert(argc > 1);
@@ -84,8 +132,16 @@ int main(int argc, char *argv[])
 	twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
+		struct SMS sms_ndsim;
+		sms->joy[0] = input_fetch(sms, sms->timestamp, 0);
+		sms->joy[1] = input_fetch(sms, sms->timestamp, 1);
 		bot_update();
+		sms_copy(&sms_ndsim, sms);
 		sms_run_frame(sms);
+		sms_ndsim.no_draw = true;
+		sms_run_frame(&sms_ndsim);
+		sms_ndsim.no_draw = false;
+		assert(memcmp(&sms_ndsim, sms, sizeof(struct SMS)) == 0);
 
 		uint64_t tnow = time_now();
 		twait += 20000;

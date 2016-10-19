@@ -96,7 +96,6 @@ extern uint8_t sms_rom[512*1024];
 extern bool sms_rom_is_banked;
 
 // sms.c
-uint8_t sms_input_fetch(struct SMS *sms, uint64_t timestamp, int port);
 void sms_init(struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMS *sms, uint64_t timestamp);
