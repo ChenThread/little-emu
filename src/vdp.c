@@ -252,69 +252,47 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
-		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0 || sms->no_draw) {
-			if(y < -54 || y >= 192+48) {
-				assert(vctr >= 0 && vctr < SCANLINES);
-				if(!(sms->no_draw)) {
-					for(int hctr = hbeg; hctr < hend; hctr++) {
-						assert(hctr >= 0 && hctr < 342);
-						frame_data[vctr][hctr] = 0x00;
-					}
-				}
-			} else {
-				if(y >= 0 && y < 192) {
-					// Overflow test
-					int stab_len = 0;
-					for(int i = 0; i < 64; i++) {
-						// End of list marker
-						// XXX: only for 192-line mode!
-						if(sp_tab_y[i] == 0xD0) {
-							break;
-						}
-
-						uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
-						if(sy < sdethigh) {
-							if(stab_len >= 8) {
-								vdp->status_latches |= 0x40; // OVR
-								break;
-							}
-							stab_len++;
-						}
-					}
-				}
-
-				if(!(sms->no_draw)) {
-					assert(vctr >= 0 && vctr < SCANLINES);
-					for(int hctr = hbeg; hctr < hend; hctr++) {
-						assert(hctr >= 0 && hctr < 342);
-						frame_data[vctr][hctr] = bcol;
-					}
-				}
+		// Read sprite data
+		// TODO: latch this into VDP state
+		uint8_t stab[8];
+		int stab_len = 0;
+		for(int i = 0; i < 64; i++) {
+			// End of list marker
+			// XXX: only for 192-line mode!
+			if(sp_tab_y[i] == 0xD0) {
+				break;
 			}
-		} else {
-			int py = (y+scy)%(28*8);
 
-			// Calculate sprites
-			// TODO: find actual location for this
-			// TODO: delegate this to later state
-			uint8_t stab[8];
-			int stab_len = 0;
-			for(int i = 0; i < 64; i++) {
-				// End of list marker
-				// XXX: only for 192-line mode!
-				if(sp_tab_y[i] == 0xD0) {
+			uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
+			if(sy < sdethigh) {
+				if(stab_len >= 8) {
+					if(y >= 0 && y < 192) {
+						vdp->status_latches |= 0x40; // OVR
+					}
 					break;
 				}
+				stab[stab_len++] = i;
+			}
+		}
 
-				uint8_t sy = (uint8_t)(y-sp_tab_y[i]);
-				if(sy < sdethigh) {
-					if(stab_len >= 8) {
-						vdp->status_latches |= 0x40; // OVR
-						break;
-					}
-					stab[stab_len++] = i;
+		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
+			if(y < -54 || y >= 192+48) {
+				assert(vctr >= 0 && vctr < SCANLINES);
+				for(int hctr = hbeg; hctr < hend; hctr++) {
+					assert(hctr >= 0 && hctr < 342);
+					frame_data[vctr][hctr] = 0x00;
+				}
+			} else {
+				assert(vctr >= 0 && vctr < SCANLINES);
+				for(int hctr = hbeg; hctr < hend; hctr++) {
+					assert(hctr >= 0 && hctr < 342);
+					frame_data[vctr][hctr] = bcol;
 				}
 			}
+		} else if(sms->no_draw) {
+			// TODO!
+		} else {
+			int py = (y+scy)%(28*8);
 
 			int scr_ykill = (((vdp->regs[0x00]&0x80)==0)
 				? 0x100
@@ -398,7 +376,8 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 							if(ns != 0) {
 								if(s != 0) {
-									vdp->status |= 0x20; // COL
+									// TODO: get this working in no_draw mode
+									//vdp->status |= 0x20; // COL
 									break;
 								}
 								s = ns|0x10;
