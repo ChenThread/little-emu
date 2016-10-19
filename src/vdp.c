@@ -186,6 +186,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 			}
 		}
 
+		// Lock top H scroll if lock bit set
+		if(((uint32_t)y) < 16 && (vdp->regs[0x00]&0x40)!=0) {
+			scx = 0;
+		}
+
 		// Set vblank IRQ
 		if(y == 0xC1 && (sms->vdp.regs[0x01]&0x20) != 0) {
 			if(hbeg < VINT_OFFS && VINT_OFFS <= hend) {
@@ -308,21 +313,28 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				}
 			}
 
+			int scr_ykill = (((vdp->regs[0x00]&0x80)==0)
+				? 0x100
+				: 24*8-((-scx)&7));
+
 			assert(vctr >= 0 && vctr < SCANLINES);
 			for(int hctr = hbeg; hctr < hend; hctr++) {
 				int x = hctr - 47;
+
 				if(x >= lborder && x < 256) {
-					// TODO get colour PROPERLY
-					// TODO sprites
+					// TODO refactor this all into something more believable
 					int px = (x+scx)&0xFF;
+					int eff_py = (x < scr_ykill
+						? py
+						: y&0xFF);
 
 					// Read name table for tile
-					uint8_t *np = &bg_names[2*((py>>3)*32+(px>>3))];
+					uint8_t *np = &bg_names[2*((eff_py>>3)*32+(px>>3))];
 					uint16_t nl = (uint16_t)(np[0]);
 					uint16_t nh = (uint16_t)(np[1]);
 					uint16_t n = nl|(nh<<8);
 					uint16_t tile = n&0x1FF;
-					//tile = ((px>>3)+(py>>3)*32)&0x1FF;
+					//tile = ((px>>3)+(eff_py>>3)*32)&0x1FF;
 
 					// Prepare for tile read
 					uint8_t *tp = &bg_tiles[tile*4*8];
@@ -331,22 +343,27 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 					uint8_t xflip = ((nh>>1)&1)*7;
 					uint8_t yflip = ((nh>>2)&1)*7;
 					int spx = (px^xflip^7)&7;
-					int spy = ((py^yflip)&7)<<2;
+					int spy = ((eff_py^yflip)&7)<<2;
 
-					// Read tile
-					uint8_t t0 = tp[spy+0];
-					uint8_t t1 = tp[spy+1];
-					uint8_t t2 = tp[spy+2];
-					uint8_t t3 = tp[spy+3];
+					uint8_t v = 0;
 
-					// Planar to chunky
-					uint8_t v = 0
-						| (((t0>>spx)&1)<<0)
-						| (((t1>>spx)&1)<<1)
-						| (((t2>>spx)&1)<<2)
-						| (((t3>>spx)&1)<<3)
-						| 0;
-					//v = spx^spy;
+					// Ensure we aren't in the pre-read stage
+					if(x >= ((-scx)&7)) { 
+						// Read tile
+						uint8_t t0 = tp[spy+0];
+						uint8_t t1 = tp[spy+1];
+						uint8_t t2 = tp[spy+2];
+						uint8_t t3 = tp[spy+3];
+
+						// Planar to chunky
+						v = 0
+							| (((t0>>spx)&1)<<0)
+							| (((t1>>spx)&1)<<1)
+							| (((t2>>spx)&1)<<2)
+							| (((t3>>spx)&1)<<3)
+							| 0;
+						//v = spx^spy;
+					}
 
 					// Get sprite pixels
 					uint8_t s = 0;
