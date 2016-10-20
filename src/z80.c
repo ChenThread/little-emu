@@ -27,7 +27,7 @@ static uint8_t z80_mem_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 		return sms_rom[addr];
 	} else {
 		uint32_t raddr0 = (uint32_t)(addr&0x3FFF);
-		uint32_t raddr1 = ((uint32_t)(sms->paging[(addr>>14)&3]&0x1F))<<14;
+		uint32_t raddr1 = ((uint32_t)(sms->paging[(addr>>14)&3]))<<14;
 		uint32_t raddr = raddr0|raddr1;
 		return sms_rom[raddr];
 	}
@@ -69,6 +69,7 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 				h >>= 2;
 				h &= 0xFF;
 				sms->hlatch = h;
+				//if(sms->z80.pc == 0x0C90 || sms->z80.pc == 0x0B59)
 				//printf("HC %04X = %02X\n", sms->z80.pc, h);
 			}
 

@@ -108,7 +108,7 @@ struct SMS
 	uint64_t timestamp_end;
 };
 
-extern uint8_t sms_rom[512*1024];
+extern uint8_t sms_rom[4*1024*1024];
 extern bool sms_rom_is_banked;
 
 // sms.c

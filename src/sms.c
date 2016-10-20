@@ -2,7 +2,7 @@
 
 struct SMS sms_current;
 
-uint8_t sms_rom[512*1024];
+uint8_t sms_rom[4*1024*1024];
 bool sms_rom_is_banked = false;
 uint64_t twait;
 
@@ -63,6 +63,7 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 
 void sms_run_frame(struct SMS *sms)
 {
+	//const int pt_VINT = 684*(FRAME_START_Y+0xC1) + (94-18*2+15);
 	const int pt_VINT = 684*(FRAME_START_Y+0xC1) + (94-18*2);
 
 	// Run a frame

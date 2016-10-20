@@ -107,6 +107,18 @@ int main(int argc, char *argv[])
 			printf("Copy 256KB -> 512KB\n");
 			memcpy(&sms_rom[256*1024], sms_rom, 256*1024);
 		}
+		if(rsiz <= 512*1024) {
+			printf("Copy 512KB -> 1MB\n");
+			memcpy(&sms_rom[512*1024], sms_rom, 512*1024);
+		}
+		if(rsiz <= 1*1024*1024) {
+			printf("Copy 1MB -> 2MB\n");
+			memcpy(&sms_rom[1*1024*1024], sms_rom, 1*1024*1024);
+		}
+		if(rsiz <= 2*1024*1024) {
+			printf("Copy 2MB -> 4MB\n");
+			memcpy(&sms_rom[2*1024*1024], sms_rom, 2*1024*1024);
+		}
 	}
 
 	// Set up SMS
