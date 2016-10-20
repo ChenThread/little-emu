@@ -144,10 +144,12 @@ int main(int argc, char *argv[])
 		bot_update();
 		sms_copy(&sms_ndsim, sms);
 		sms_run_frame(sms);
+		/*
 		sms_ndsim.no_draw = true;
 		sms_run_frame(&sms_ndsim);
 		sms_ndsim.no_draw = false;
 		assert(memcmp(&sms_ndsim, sms, sizeof(struct SMS)) == 0);
+		*/
 
 		uint64_t tnow = time_now();
 		twait += FRAME_WAIT;

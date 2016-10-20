@@ -62,10 +62,14 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 			// Update latch on HT 0->1
 			if((!th_pin_state(sms->iocfg)) && th_pin_state(val)) {
 				uint32_t h = timestamp%(684ULL);
+				//h = (h+684-9)%684;
+				h = (h+684)%684;
 				h -= 94;
-				h += 2;
+				h += 3;
 				h >>= 2;
+				h &= 0xFF;
 				sms->hlatch = h;
+				//printf("HC %04X = %02X\n", sms->z80.pc, h);
 			}
 
 			// Write actual thing
@@ -121,12 +125,27 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 
 		case 2: // V counter
 			{
-				uint64_t v = timestamp;
+				// TODO: work out why there's an offset here
+				uint64_t v = timestamp+18;
 				v -= (94-16*2);
 				v += 684ULL*(unsigned long long)SCANLINES;
 				v /= 684ULL;
 				v %= (unsigned long long)SCANLINES;
 				v -= FRAME_START_Y;
+				/*
+				if(sms->z80.pc != 0x0046 && sms->z80.pc != 0x0632 && sms->z80.pc != 0x648) {
+					uint32_t h = timestamp%(684ULL);
+					h = (h+684)%684;
+					h -= 94;
+					h += 3;
+					h >>= 2;
+					h &= 0xFF;
+					printf("VC %04X = %02X [%02X]\n"
+						, sms->z80.pc
+						, (uint32_t)(v&0xFF)
+						, h);
+				}
+				*/
 				return v;
 			}
 
@@ -137,6 +156,17 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 			return vdp_read_data(&sms->vdp, sms, timestamp);
 
 		case 5: // VDP control
+			/*
+			if(sms->z80.pc != 0x003B) {
+				uint32_t h = timestamp%(684ULL);
+				h = (h+684)%684;
+				h -= 94;
+				h += 2;
+				h >>= 2;
+				h &= 0xFF;
+				//printf("HC VDP %04X = %02X %02X\n", sms->z80.pc, h, sms->vdp.status);
+			}
+			*/
 			return vdp_read_ctrl(&sms->vdp, sms, timestamp);
 
 		case 6: // I/O port A
@@ -418,6 +448,13 @@ void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
 		return;
 	}
 
+	/*
+	printf("IRQ %d %d\n"
+		, (int32_t)(z80->timestamp%684)
+		, (int32_t)((z80->timestamp%(684*SCANLINES))/684)
+		);
+	*/
+
 	// TODO: fetch op using dat
 	assert(z80->im == 1);
 
@@ -469,7 +506,11 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 
 			z80_irq(z80, sms, 0xFF);
 		} else {
-			z80->timestamp = timestamp;
+			while(TIME_IN_ORDER(z80->timestamp, timestamp)) {
+				Z80_ADD_CYCLES(z80, 4);
+				z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F);
+			}
+			//z80->timestamp = timestamp;
 			return;
 		}
 	}
@@ -1504,6 +1545,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80_irq(z80, sms, 0xFF);
 					continue;
 				} else {
+					while(TIME_IN_ORDER(z80->timestamp, timestamp)) {
+						Z80_ADD_CYCLES(z80, 4);
+					}
 					return;
 				}
 			}
