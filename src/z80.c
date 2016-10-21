@@ -2040,12 +2040,12 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RL] = z80_fetch_op_x(z80, sms);
 				} break;
 			case 0x36: if(ix >= 0) {
-					// 
+					// LD (Iz+d), n
 					uint16_t addr = z80_fetch_ix_d(z80, sms, ix);
-					Z80_ADD_CYCLES(z80, 1);
-					z80_mem_write(sms, z80->timestamp,
-						addr,
-						z80_fetch_op_x(z80, sms));
+					Z80_ADD_CYCLES(z80, -5);
+					uint8_t dat = z80_fetch_op_x(z80, sms);
+					Z80_ADD_CYCLES(z80, 2);
+					z80_mem_write(sms, z80->timestamp, addr, dat);
 					Z80_ADD_CYCLES(z80, 3);
 			
 				} else {

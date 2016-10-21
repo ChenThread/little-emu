@@ -5,6 +5,10 @@ DRAFT README FILE LIKELY TO BE WRONG IN PLACES
 
 WARNING: This has not been tested on real hardware.
 
+TODO:
+* Verify some of the IXH/IXL/IYH/IYL instruction timings.
+  Cogwheel/BizHawk says 9. Absolutely everything else says 8.
+
 REQUIREMENTS:
 
 You must have a VDP that can do vblank interrupts.
