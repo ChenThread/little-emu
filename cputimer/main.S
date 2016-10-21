@@ -82,6 +82,8 @@ test_print_str:
 	pop hl
 	call print_str
 	inc hl
+	ld a, ':'
+	call print_char
 	push hl
 	-:
 		ld a, (text_xoffs)
@@ -249,41 +251,41 @@ start:
 	ei
 
 	; Base test
-	TEST_BEG "Base timing:"
+	TEST_BEG "Base timing"
 	TEST_END 0
 	call print_ln
 
 	; Ensure base test sanity
 	; BIT 0, (HL)
-	TEST_BEG "BIT 0, (HL):"
+	TEST_BEG "BIT 0, (HL)"
 	bit 0, (hl)
 	TEST_END 12
 	; INC DE
-	TEST_BEG "INC BC:"
+	TEST_BEG "INC BC"
 	inc bc
 	TEST_END 6
-	TEST_BEG "DEC BC:"
+	TEST_BEG "DEC BC"
 	dec bc
 	TEST_END 6
-	TEST_BEG "INC/DEC BC:"
+	TEST_BEG "INC/DEC BC"
 	inc bc
 	dec bc
 	TEST_END 12
-	TEST_BEG "INC/DEC DE:"
+	TEST_BEG "INC/DEC DE"
 	inc de
 	dec de
 	TEST_END 12
 	; JP z, $nnnn
-	TEST_BEG "JP Z:"
+	TEST_BEG "JP Z"
 	jp z, +
 	+:
 	TEST_END 10
-	TEST_BEG "XOR A; JP Z:"
+	TEST_BEG "XOR A; JP Z"
 	xor a
 	jp z, +
 	+:
 	TEST_END 14
-	TEST_BEG "XOR A; INC A; JP Z:"
+	TEST_BEG "XOR A; INC A; JP Z"
 	xor a
 	inc a
 	jp z, +
@@ -293,21 +295,21 @@ start:
 	call print_ln
 
 	; Some supporting stuff
-	TEST_BEG "PUSH DE; POP DE:"
+	TEST_BEG "PUSH DE; POP DE"
 	push de
 	pop de
 	TEST_END 21
-	TEST_BEG "PUSH DE; INC SP x2:"
+	TEST_BEG "PUSH DE; INC SP x2"
 	push de
 	inc sp
 	inc sp
 	TEST_END 23
-	TEST_BEG "DEC SP x2; POP BC:"
+	TEST_BEG "DEC SP x2; POP BC"
 	dec sp
 	dec sp
 	pop bc
 	TEST_END 22
-	TEST_BEG "INC SP; DEC SP:"
+	TEST_BEG "INC SP; DEC SP"
 	inc sp
 	dec sp
 	TEST_END 12
