@@ -358,3 +358,5 @@
 	cp a
 	TEST_END 4
 
+	call print_ln
+

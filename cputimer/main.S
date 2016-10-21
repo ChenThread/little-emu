@@ -47,6 +47,7 @@ defaultslot 0
 
 	ld hl, $10001+3-(1+((228*(313)-IRQ_WAIT+(\1)+6+8)/(28+(\1))))
 	ld bc, $10001+3-(1+((228*(262)-IRQ_WAIT+(\1)+6+8)/(28+(\1))))
+	ld sp, $DFF0
 	rst $18
 .endm
 
@@ -321,6 +322,7 @@ start:
 	.include "x0.S"
 	.include "x1.S"
 	.include "x2.S"
+	.include "x3.S"
 
 	; TODO: the rest
 
