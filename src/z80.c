@@ -868,6 +868,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| (z80->gpr[RA]&0xA8)
 						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
 						| (z80->iff2 ? 0x04 : 0x00);
+					Z80_ADD_CYCLES(z80, 5);
 					break;
 				case 0x5F: // LD A, R
 					z80->gpr[RA] = z80->r;
@@ -875,6 +876,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| (z80->gpr[RA]&0xA8)
 						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
 						| (z80->iff2 ? 0x04 : 0x00);
+					Z80_ADD_CYCLES(z80, 5);
 					break;
 
 				case 0x67: { // RRD
