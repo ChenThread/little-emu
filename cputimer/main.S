@@ -320,6 +320,7 @@ start:
 
 	.include "x0.S"
 	.include "x1.S"
+	.include "x2.S"
 
 	; TODO: the rest
 
