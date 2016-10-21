@@ -324,6 +324,8 @@ start:
 	.include "x2.S"
 	.include "x3.S"
 
+	.include "edx1.S"
+
 	; TODO: the rest
 
 	; DONE!

@@ -784,8 +784,18 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						addr, z80->gpr[RD]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
-				// 0x63 appears to be an alias to LD (nn), HL/IX/IY
-				// I don't know if IX/IY works there, though
+				case 0x63: { // LD (nn), HL (alt)
+					uint8_t nl = z80_fetch_op_x(z80, sms);
+					uint8_t nh = z80_fetch_op_x(z80, sms);
+					uint16_t addr = z80_pair(nh, nl);
+					z80_mem_write(sms, z80->timestamp,
+						addr, z80->gpr[RL]);
+					Z80_ADD_CYCLES(z80, 3);
+					addr++;
+					z80_mem_write(sms, z80->timestamp,
+						addr, z80->gpr[RH]);
+					Z80_ADD_CYCLES(z80, 3);
+				} break;
 				case 0x73: { // LD (nn), SP
 					uint8_t nl = z80_fetch_op_x(z80, sms);
 					uint8_t nh = z80_fetch_op_x(z80, sms);
@@ -821,7 +831,16 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					z80->gpr[RD] = z80_mem_read(sms, z80->timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
-				// 0x6B
+				case 0x6B: { // LD HL, (nn) (alt)
+					uint8_t nl = z80_fetch_op_x(z80, sms);
+					uint8_t nh = z80_fetch_op_x(z80, sms);
+					uint16_t addr = z80_pair(nh, nl);
+					z80->gpr[RL] = z80_mem_read(sms, z80->timestamp, addr);
+					Z80_ADD_CYCLES(z80, 3);
+					addr++;
+					z80->gpr[RH] = z80_mem_read(sms, z80->timestamp, addr);
+					Z80_ADD_CYCLES(z80, 3);
+				} break;
 				case 0x7B: { // LD SP, (nn)
 					uint8_t nl = z80_fetch_op_x(z80, sms);
 					uint8_t nh = z80_fetch_op_x(z80, sms);
@@ -862,13 +881,21 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				case 0x7E: z80->im = 2; break;
 
 				// Z=7
+				case 0x47: // LD I, A
+					z80->i = z80->gpr[RA];
+					Z80_ADD_CYCLES(z80, 1);
+					break;
+				case 0x4F: // LD R, A
+					z80->r = z80->gpr[RA];
+					Z80_ADD_CYCLES(z80, 1);
+					break;
 				case 0x57: // LD A, I
 					z80->gpr[RA] = z80->i;
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RA]&0xA8)
 						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
 						| (z80->iff2 ? 0x04 : 0x00);
-					Z80_ADD_CYCLES(z80, 5);
+					Z80_ADD_CYCLES(z80, 1);
 					break;
 				case 0x5F: // LD A, R
 					z80->gpr[RA] = z80->r;
@@ -876,7 +903,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| (z80->gpr[RA]&0xA8)
 						| (z80->gpr[RA] == 0 ? 0x40 : 0x00)
 						| (z80->iff2 ? 0x04 : 0x00);
-					Z80_ADD_CYCLES(z80, 5);
+					Z80_ADD_CYCLES(z80, 1);
 					break;
 
 				case 0x67: { // RRD

@@ -91,151 +91,151 @@
 	TEST_END 4
 
 	; Y=2
-	TEST_BEG "EXX; LD D, B; EXX"
+	TEST_BEG "EXX; LD D, B"
 	exx
 	ld d, b
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, C; EXX"
+	TEST_BEG "EXX; LD D, C"
 	exx
 	ld d, c
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, D; EXX"
+	TEST_BEG "EXX; LD D, D"
 	exx
 	ld d, d
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, E; EXX"
+	TEST_BEG "EXX; LD D, E"
 	exx
 	ld d, e
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, H; EXX"
+	TEST_BEG "EXX; LD D, H"
 	exx
 	ld d, h
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, IXH; EXX"
+	TEST_BEG "EXX; LD D, IXH"
 	exx
 	ld d, ixh
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD D, IYH; EXX"
+	TEST_BEG "EXX; LD D, IYH"
 	exx
 	ld d, iyh
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD D, L; EXX"
+	TEST_BEG "EXX; LD D, L"
 	exx
 	ld d, l
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD D, IXL; EXX"
+	TEST_BEG "EXX; LD D, IXL"
 	exx
 	ld d, ixl
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD D, IYL; EXX"
+	TEST_BEG "EXX; LD D, IYL"
 	exx
 	ld d, iyl
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD D, (HL); EXX"
+	TEST_BEG "EXX; LD D, (HL)"
 	exx
 	ld d, (hl)
 	exx
 	TEST_END 15
-	TEST_BEG "EXX; LD D, (IX+0); EXX"
+	TEST_BEG "EXX; LD D, (IX+0)"
 	exx
 	ld d, (ix+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD D, (IY+0); EXX"
+	TEST_BEG "EXX; LD D, (IY+0)"
 	exx
 	ld d, (iy+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD D, A; EXX"
+	TEST_BEG "EXX; LD D, A"
 	exx
 	ld d, a
 	exx
 	TEST_END 12
 
 	; Y=3
-	TEST_BEG "EXX; LD E, B; EXX"
+	TEST_BEG "EXX; LD E, B"
 	exx
 	ld e, b
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, C; EXX"
+	TEST_BEG "EXX; LD E, C"
 	exx
 	ld e, c
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, D; EXX"
+	TEST_BEG "EXX; LD E, D"
 	exx
 	ld e, d
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, E; EXX"
+	TEST_BEG "EXX; LD E, E"
 	exx
 	ld e, e
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, H; EXX"
+	TEST_BEG "EXX; LD E, H"
 	exx
 	ld e, h
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, IXH; EXX"
+	TEST_BEG "EXX; LD E, IXH"
 	exx
 	ld e, ixh
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD E, IYH; EXX"
+	TEST_BEG "EXX; LD E, IYH"
 	exx
 	ld e, iyh
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD E, L; EXX"
+	TEST_BEG "EXX; LD E, L"
 	exx
 	ld e, l
 	exx
 	TEST_END 12
-	TEST_BEG "EXX; LD E, IXL; EXX"
+	TEST_BEG "EXX; LD E, IXL"
 	exx
 	ld e, ixl
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD E, IYL; EXX"
+	TEST_BEG "EXX; LD E, IYL"
 	exx
 	ld e, iyl
 	exx
 	TEST_END 16
-	TEST_BEG "EXX; LD E, (HL); EXX"
+	TEST_BEG "EXX; LD E, (HL)"
 	exx
 	ld e, (hl)
 	exx
 	TEST_END 15
-	TEST_BEG "EXX; LD E, (IX+0); EXX"
+	TEST_BEG "EXX; LD E, (IX+0)"
 	exx
 	ld e, (ix+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD E, (IY+0); EXX"
+	TEST_BEG "EXX; LD E, (IY+0)"
 	exx
 	ld e, (iy+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD E, A; EXX"
+	TEST_BEG "EXX; LD E, A"
 	exx
 	ld e, a
 	exx
 	TEST_END 12
 
 	; Y=4
-	TEST_BEG "EXX; LD H, B; EXX"
+	TEST_BEG "EXX; LD H, B"
 	exx
 	ld h, b
 	exx
@@ -246,7 +246,7 @@
 	TEST_BEG "LD IYH, B"
 	ld iyh, b
 	TEST_END 8
-	TEST_BEG "EXX; LD H, C; EXX"
+	TEST_BEG "EXX; LD H, C"
 	exx
 	ld h, c
 	exx
@@ -257,7 +257,7 @@
 	TEST_BEG "LD IYH, C"
 	ld iyh, c
 	TEST_END 8
-	TEST_BEG "EXX; LD H, D; EXX"
+	TEST_BEG "EXX; LD H, D"
 	exx
 	ld h, d
 	exx
@@ -268,7 +268,7 @@
 	TEST_BEG "LD IYH, D"
 	ld iyh, d
 	TEST_END 8
-	TEST_BEG "EXX; LD H, E; EXX"
+	TEST_BEG "EXX; LD H, E"
 	exx
 	ld h, e
 	exx
@@ -279,7 +279,7 @@
 	TEST_BEG "LD IYH, E"
 	ld iyh, e
 	TEST_END 8
-	TEST_BEG "EXX; LD H, H; EXX"
+	TEST_BEG "EXX; LD H, H"
 	exx
 	ld h, h
 	exx
@@ -290,7 +290,7 @@
 	TEST_BEG "LD IYH, IYH"
 	ld iyh, iyh
 	TEST_END 8
-	TEST_BEG "EXX; LD H, L; EXX"
+	TEST_BEG "EXX; LD H, L"
 	exx
 	ld h, l
 	exx
@@ -301,22 +301,22 @@
 	TEST_BEG "LD IYH, IYL"
 	ld iyh, iyl
 	TEST_END 8
-	TEST_BEG "EXX; LD H, (HL); EXX"
+	TEST_BEG "EXX; LD H, (HL)"
 	exx
 	ld h, (hl)
 	exx
 	TEST_END 15
-	TEST_BEG "EXX; LD H, (IX+0); EXX"
+	TEST_BEG "EXX; LD H, (IX+0)"
 	exx
 	ld h, (ix+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD H, (IY+0); EXX"
+	TEST_BEG "EXX; LD H, (IY+0)"
 	exx
 	ld h, (iy+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD H, A; EXX"
+	TEST_BEG "EXX; LD H, A"
 	exx
 	ld h, a
 	exx
@@ -329,7 +329,7 @@
 	TEST_END 8
 
 	; Y=5
-	TEST_BEG "EXX; LD L, B; EXX"
+	TEST_BEG "EXX; LD L, B"
 	exx
 	ld l, b
 	exx
@@ -340,7 +340,7 @@
 	TEST_BEG "LD IYL, B"
 	ld iyl, b
 	TEST_END 8
-	TEST_BEG "EXX; LD L, C; EXX"
+	TEST_BEG "EXX; LD L, C"
 	exx
 	ld l, c
 	exx
@@ -351,7 +351,7 @@
 	TEST_BEG "LD IYL, C"
 	ld iyl, c
 	TEST_END 8
-	TEST_BEG "EXX; LD L, D; EXX"
+	TEST_BEG "EXX; LD L, D"
 	exx
 	ld l, d
 	exx
@@ -362,7 +362,7 @@
 	TEST_BEG "LD IYL, D"
 	ld iyl, d
 	TEST_END 8
-	TEST_BEG "EXX; LD L, E; EXX"
+	TEST_BEG "EXX; LD L, E"
 	exx
 	ld l, e
 	exx
@@ -373,7 +373,7 @@
 	TEST_BEG "LD IYL, E"
 	ld iyl, e
 	TEST_END 8
-	TEST_BEG "EXX; LD L, H; EXX"
+	TEST_BEG "EXX; LD L, H"
 	exx
 	ld l, h
 	exx
@@ -384,7 +384,7 @@
 	TEST_BEG "LD IYL, IYH"
 	ld iyl, iyh
 	TEST_END 8
-	TEST_BEG "EXX; LD L, L; EXX"
+	TEST_BEG "EXX; LD L, L"
 	exx
 	ld l, l
 	exx
@@ -395,22 +395,22 @@
 	TEST_BEG "LD IYL, IYL"
 	ld iyl, iyl
 	TEST_END 8
-	TEST_BEG "EXX; LD L, (HL); EXX"
+	TEST_BEG "EXX; LD L, (HL)"
 	exx
 	ld l, (hl)
 	exx
 	TEST_END 15
-	TEST_BEG "EXX; LD L, (IX+0); EXX"
+	TEST_BEG "EXX; LD L, (IX+0)"
 	exx
 	ld l, (ix+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD L, (IY+0); EXX"
+	TEST_BEG "EXX; LD L, (IY+0)"
 	exx
 	ld l, (iy+0)
 	exx
 	TEST_END 27
-	TEST_BEG "EXX; LD L, A; EXX"
+	TEST_BEG "EXX; LD L, A"
 	exx
 	ld l, a
 	exx

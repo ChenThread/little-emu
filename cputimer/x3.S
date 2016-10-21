@@ -166,7 +166,7 @@
 	TEST_END 30
 
 	; Y=3
-	TEST_BEG "EXX; EXX"
+	TEST_BEG "EXX x2"
 	exx
 	exx
 	TEST_END 8

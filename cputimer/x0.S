@@ -7,7 +7,10 @@
 	TEST_BEG "NOP"
 	nop
 	TEST_END 4
-	; Y=1 cannot be tested
+	; Y=1
+	TEST_BEG "EX AF, AF'"
+	ex af, af'
+	TEST_END 4
 	; Y=2
 	TEST_BEG "LD B, 2; DJNZ"
 	ld b, $02
@@ -82,17 +85,17 @@
 	add hl, bc
 	ld hl, int_fired
 	TEST_END 21
-	TEST_BEG "EXX; ADD HL, BC; EXX"
+	TEST_BEG "EXX; ADD HL, BC"
 	exx
 	add hl, bc
 	exx
 	TEST_END 19
-	TEST_BEG "EXX; ADD IX, BC; EXX"
+	TEST_BEG "EXX; ADD IX, BC"
 	exx
 	add ix, bc
 	exx
 	TEST_END 23
-	TEST_BEG "EXX; ADD IY, BC; EXX"
+	TEST_BEG "EXX; ADD IY, BC"
 	exx
 	add iy, bc
 	exx
@@ -104,7 +107,7 @@
 	ld de, $1234
 	pop de
 	TEST_END 31
-	TEST_BEG "EXX; LD DE, NN; EXX"
+	TEST_BEG "EXX; LD DE, NN"
 	exx
 	ld de, $1234
 	exx
@@ -115,17 +118,17 @@
 	add hl, de
 	ld hl, int_fired
 	TEST_END 21
-	TEST_BEG "EXX; ADD HL, DE; EXX"
+	TEST_BEG "EXX; ADD HL, DE"
 	exx
 	add hl, de
 	exx
 	TEST_END 19
-	TEST_BEG "EXX; ADD IX, DE; EXX"
+	TEST_BEG "EXX; ADD IX, DE"
 	exx
 	add ix, de
 	exx
 	TEST_END 23
-	TEST_BEG "EXX; ADD IY, DE; EXX"
+	TEST_BEG "EXX; ADD IY, DE"
 	exx
 	add iy, de
 	exx
@@ -147,7 +150,7 @@
 	add hl, de
 	ld hl, int_fired
 	TEST_END 21
-	TEST_BEG "EXX; ADD HL, HL; EXX"
+	TEST_BEG "EXX; ADD HL, HL"
 	exx
 	add hl, de
 	exx
@@ -169,7 +172,7 @@
 	add hl, sp
 	ld hl, int_fired
 	TEST_END 21
-	TEST_BEG "EXX; ADD HL, SP; EXX"
+	TEST_BEG "EXX; ADD HL, SP"
 	exx
 	add hl, sp
 	exx
@@ -246,19 +249,19 @@
 	dec bc
 	TEST_END 6
 	; Y=2
-	TEST_BEG "EXX; INC DE; EXX"
+	TEST_BEG "EXX; INC DE"
 	exx
 	inc de
 	exx
 	TEST_END 14
 	; Y=3
-	TEST_BEG "EXX; DEC DE; EXX"
+	TEST_BEG "EXX; DEC DE"
 	exx
 	dec de
 	exx
 	TEST_END 14
 	; Y=4
-	TEST_BEG "EXX; INC HL; EXX"
+	TEST_BEG "EXX; INC HL"
 	exx
 	inc hl
 	exx
@@ -270,7 +273,7 @@
 	inc iy
 	TEST_END 10
 	; Y=5
-	TEST_BEG "EXX; DEC HL; EXX"
+	TEST_BEG "EXX; DEC HL"
 	exx
 	dec hl
 	exx
@@ -304,19 +307,19 @@
 	inc c
 	TEST_END 4
 	; Y=2
-	TEST_BEG "EXX; INC D; EXX"
+	TEST_BEG "EXX; INC D"
 	exx
 	inc d
 	exx
 	TEST_END 12
 	; Y=3
-	TEST_BEG "EXX; INC E; EXX"
+	TEST_BEG "EXX; INC E"
 	exx
 	inc e
 	exx
 	TEST_END 12
 	; Y=4
-	TEST_BEG "EXX; INC H; EXX"
+	TEST_BEG "EXX; INC H"
 	exx
 	inc h
 	exx
@@ -328,7 +331,7 @@
 	inc iyh
 	TEST_END 8
 	; Y=5
-	TEST_BEG "EXX; INC L; EXX"
+	TEST_BEG "EXX; INC L"
 	exx
 	inc l
 	exx
@@ -369,19 +372,19 @@
 	dec c
 	TEST_END 4
 	; Y=2
-	TEST_BEG "EXX; DEC D; EXX"
+	TEST_BEG "EXX; DEC D"
 	exx
 	dec d
 	exx
 	TEST_END 12
 	; Y=3
-	TEST_BEG "EXX; DEC E; EXX"
+	TEST_BEG "EXX; DEC E"
 	exx
 	dec e
 	exx
 	TEST_END 12
 	; Y=4
-	TEST_BEG "EXX; DEC H; EXX"
+	TEST_BEG "EXX; DEC H"
 	exx
 	dec h
 	exx
@@ -393,7 +396,7 @@
 	dec iyh
 	TEST_END 8
 	; Y=5
-	TEST_BEG "EXX; DEC L; EXX"
+	TEST_BEG "EXX; DEC L"
 	exx
 	dec l
 	exx
@@ -436,13 +439,13 @@
 	ld c,$39
 	TEST_END 7
 	; Y=2
-	TEST_BEG "EXX; LD D, N; EXX"
+	TEST_BEG "EXX; LD D, N"
 	exx
 	ld d,$39
 	exx
 	TEST_END 15
 	; Y=3
-	TEST_BEG "EXX; LD E, N; EXX"
+	TEST_BEG "EXX; LD E, N"
 	exx
 	ld e,$39
 	exx
