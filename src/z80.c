@@ -699,7 +699,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_sbc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x52: { // SBC HL, DE
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -707,7 +707,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_sbc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x62: { // SBC HL, HL
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -715,7 +715,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_sbc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x72: { // SBC HL, SP
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -723,7 +723,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_sbc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 
 				case 0x4A: { // ADC HL, BC
@@ -732,7 +732,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_adc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x5A: { // ADC HL, DE
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -740,7 +740,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_adc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x6A: { // ADC HL, HL
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -748,7 +748,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_adc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 				case 0x7A: { // ADC HL, SP
 					uint16_t hl = z80_pair_pbe(&z80->gpr[RH]);
@@ -756,7 +756,7 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 					hl = z80_adc16(z80, hl, q);
 					z80->gpr[RH] = (uint8_t)(hl>>8);
 					z80->gpr[RL] = (uint8_t)(hl>>0);
-					Z80_ADD_CYCLES(z80, 11);
+					Z80_ADD_CYCLES(z80, 7);
 				} break;
 
 				// Z=3
