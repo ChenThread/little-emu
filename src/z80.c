@@ -11,8 +11,14 @@ static void z80_mem_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, ui
 		sms->ram[addr&0x1FFF] = val;
 	}
 
-	if(addr >= 0xFFFC && sms_rom_is_banked) {
-		sms->paging[(addr-1)&3] = val;
+	if(sms_rom_is_banked) {
+		if(addr >= 0xFFFC) {
+			// Sega mapper
+			sms->paging[(addr-1)&3] = val;
+		} else if((addr>>14) == 2) {
+			// Codemasters mapper
+			sms->paging[(addr>>14)&3] = val;
+		}
 	}
 }
 
@@ -457,18 +463,40 @@ void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat)
 	*/
 
 	// TODO: fetch op using dat
-	assert(z80->im == 1);
+	//printf("%d\n", z80->im);
+	//assert(z80->im == 1);
 
-	z80->iff1 = 0;
-	z80->iff2 = 0;
-	Z80_ADD_CYCLES(z80, 7);
-	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
-	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
-	Z80_ADD_CYCLES(z80, 3);
-	z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
-	Z80_ADD_CYCLES(z80, 3);
-	z80->pc = 0x0038;
-	z80->halted = false;
+	if(z80->im == 2) {
+		// IM2
+		z80->iff1 = 0;
+		z80->iff2 = 0;
+		Z80_ADD_CYCLES(z80, 7);
+		z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
+		z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+		Z80_ADD_CYCLES(z80, 3);
+		z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+		Z80_ADD_CYCLES(z80, 3);
+		uint16_t saddr = ((uint16_t)z80->i)<<8;
+		saddr += 0xFF;
+		z80->pc = 0xFF&z80_mem_read(sms, z80->timestamp, saddr++);
+		Z80_ADD_CYCLES(z80, 3);
+		z80->pc |= ((uint16_t)(0xFF&z80_mem_read(sms, z80->timestamp, saddr++)))<<8;
+		Z80_ADD_CYCLES(z80, 3);
+		z80->halted = false;
+
+	} else {
+		// XXX: assuming 0xFF is on the bus for IM 0 (which it IS on a SMS2)
+		z80->iff1 = 0;
+		z80->iff2 = 0;
+		Z80_ADD_CYCLES(z80, 7);
+		z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
+		z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+		Z80_ADD_CYCLES(z80, 3);
+		z80_mem_write(sms, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+		Z80_ADD_CYCLES(z80, 3);
+		z80->pc = 0x0038;
+		z80->halted = false;
+	}
 }
 
 void z80_nmi(struct Z80 *z80, struct SMS *sms)

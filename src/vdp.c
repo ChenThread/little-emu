@@ -21,9 +21,17 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	//uint32_t end_toffs = ts_end%((unsigned long long)(684*SCANLINES));
 
 	// Get some timestamps
+	int vint_line = 0xC1;
+	if((vdp->regs[0x00]&0x02) != 0) {
+		if((vdp->regs[0x01]&0x18) == 0x10) {
+			vint_line = 0xE1;
+		} else if((vdp->regs[0x01]&0x18) == 0x08) {
+			vint_line = 0xF1;
+		}
+	}
 	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
 	uint64_t ts_beg_int = ts_beg_frame + (FRAME_START_Y)*684 + 2*LINT_OFFS;
-	uint64_t ts_end_int = ts_beg_frame + (FRAME_START_Y+192+1)*684 + 2*LINT_OFFS;
+	uint64_t ts_end_int = ts_beg_frame + (FRAME_START_Y+vint_line)*684 + 2*LINT_OFFS;
 
 	// If we are after the frame interrupt, advance
 	if(!TIME_IN_ORDER(ts_beg, ts_end_int)) {
@@ -132,6 +140,16 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 	uint64_t timediff = timestamp - vdp->timestamp;
 
+	// FIXME: get correct timing for non-192 modes
+	int vint_line = 0xC1;
+	if((vdp->regs[0x00]&0x02) != 0) {
+		if((vdp->regs[0x01]&0x18) == 0x10) {
+			vint_line = 0xE1;
+		} else if((vdp->regs[0x01]&0x18) == 0x08) {
+			vint_line = 0xF1;
+		}
+	}
+
 	// Fetch vcounters/hcounters
 	uint32_t vctr_beg = ((vdp->timestamp/(684ULL))%((unsigned long long)SCANLINES));
 	uint32_t hctr_beg = (vdp->timestamp%(684ULL));
@@ -149,6 +167,12 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	uint8_t *sp_tiles = &sms->vram[((vdp->regs[0x06]<<11)&0x2000)];
 	uint8_t *bg_names = &sms->vram[((vdp->regs[0x02]<<10)&0x3800)];
 	uint8_t *bg_tiles = &sms->vram[0];
+
+	int scywrap = 28*8;
+	if(vint_line != 0xC1) {
+		bg_names = &sms->vram[((vdp->regs[0x02]<<10)&0x3000)+0x0700];
+		scywrap = 32*8;
+	}
 
 	// Draw screen section
 	int vctr = vctr_beg;
@@ -168,8 +192,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	//vdp->regs[0x05] = 0xFF;
 	//vdp->regs[0x06] = 0xFF;
 
-	// Do overflow check
-
+	// Loop
 	for(;;) {
 		int hbeg = (vctr == vctr_beg ? hctr_beg : 0);
 		int hend = (vctr == vctr_end ? hctr_end : 342);
@@ -194,7 +217,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 
 		// Set vblank IRQ
-		if(y == 0xC1 && (sms->vdp.regs[0x01]&0x20) != 0) {
+		if(y == vint_line && (sms->vdp.regs[0x01]&0x20) != 0) {
 			if(hbeg < VINT_OFFS && VINT_OFFS <= hend) {
 				sms->vdp.irq_out |= 1;
 			}
@@ -202,7 +225,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 		// Latch status flags
 		if(hbeg <= SLATCH_OFFS && SLATCH_OFFS < hend) {
-			if(y == 0xC1 && (sms->vdp.regs[0x01]&0x20) != 0) {
+			if(y == vint_line && (sms->vdp.regs[0x01]&0x20) != 0) {
 				vdp->status_latches |= 0x80;
 			}
 			vdp->status |= vdp->status_latches;
@@ -211,7 +234,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 
 		// Latch line counter
 		if(hbeg < LINT_OFFS && LINT_OFFS <= hend) {
-			if(y < 0 || y > 192) {
+			if(y < 0 || y > vint_line-1) {
 				vdp->line_counter = vdp->regs[0x0A];
 				// HACK
 				//if(vdp->line_counter == 0) { vdp->line_counter = 0xFF; }
@@ -259,14 +282,14 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		for(int i = 0; i < 64; i++) {
 			// End of list marker
 			// XXX: only for 192-line mode!
-			if(sp_tab_y[i] == 0xD0) {
+			if(sp_tab_y[i] == 0xD0 && vint_line == 0xC1) {
 				break;
 			}
 
 			uint8_t sy = (uint8_t)(y-(sp_tab_y[i]+1));
 			if(sy < sdethigh) {
 				if(stab_len >= 8) {
-					if(y >= 0 && y < 192) {
+					if(y >= 0 && y < vint_line-1) {
 						if(hbeg <= SLATCH_OFFS && SLATCH_OFFS < hend) {
 							vdp->status |= 0x40; // OVR
 						} else {
@@ -357,8 +380,8 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		}
 		}
 
-		if(y < 0 || y >= 192 || (vdp->regs[0x01]&0x40)==0) {
-			if(y < -FRAME_BORDER_TOP || y >= 192+FRAME_BORDER_BOTTOM) {
+		if(y < 0 || y >= vint_line-1 || (vdp->regs[0x01]&0x40)==0) {
+			if(y < -FRAME_BORDER_TOP || y >= vint_line-1+FRAME_BORDER_BOTTOM) {
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
@@ -377,7 +400,7 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 		} else if(sms->no_draw) {
 			// TODO!
 		} else {
-			int py = (y+scy)%(28*8);
+			int py = (y+scy)%scywrap;
 
 			int scr_ykill = (((vdp->regs[0x00]&0x80)==0)
 				? 0x100
