@@ -1,6 +1,7 @@
 #!/bin/sh
 clang -O2 -g -shared -fPIC -o libittlesms.so \
 	\
+	src/psg.c \
 	src/sms.c \
 	src/vdp.c \
 	src/z80.c \
