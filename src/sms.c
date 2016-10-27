@@ -66,17 +66,25 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 void sms_run_frame(struct SMS *sms)
 {
 	const int pt_VINT1 = 684*(FRAME_START_Y+0xC1) + (94-18*2);
+#if !USE_NTSC
 	const int pt_VINT2 = 684*(FRAME_START_Y+0xE1) + (94-18*2);
-	const int pt_VINT3 = 684*(FRAME_START_Y+0xF1) + (94-18*2);
+	//const int pt_VINT3 = 684*(FRAME_START_Y+0xF1) + (94-18*2);
+#endif
 
 	// Run a frame
 	if(sms->timestamp == 0) {
 		sms->z80.timestamp = pt_VINT1;// - (pt_VINT1%684);
 		sms_run(sms, sms->timestamp + pt_VINT1);
 	}
+#if USE_NTSC
+	sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT1);
+#else
 	sms_run(sms, sms->timestamp + pt_VINT2-pt_VINT1);
-	sms_run(sms, sms->timestamp + pt_VINT3-pt_VINT2);
-	sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT3);
+	sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT2);
+	// FIXME: V-centre the frame properly so this doesn't break
+	//sms_run(sms, sms->timestamp + pt_VINT3-pt_VINT2);
+	//sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT3);
+#endif
 	sms_run(sms, sms->timestamp + pt_VINT1);
 
 	//sms_copy(&sms_prev, &sms_current);

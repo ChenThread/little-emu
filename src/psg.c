@@ -46,7 +46,11 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 
 	// Get number of samples to read/write
 	size_t src_len = SDL_AtomicGet(&sound_data_len);
+#if USE_NTSC
+	size_t ideal_samples_to_read = (228*3*262*60*len)/48000;
+#else
 	size_t ideal_samples_to_read = (228*3*313*50*len)/48000;
+#endif
 	size_t samples_to_read = ideal_samples_to_read;
 	size_t samples_to_write = len;
 	if(src_len > ideal_samples_to_read*2) {
@@ -107,7 +111,7 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 	for(uint64_t i = 0; i < timediff; i++) {
 		int32_t outval = 0;
 		for(int ch = 0; ch < 4; ch++) {
-			if(psg->period[ch] == 0) {
+			if(psg->period[ch] <= 1) {
 				outval += (int32_t)(uint32_t)psg->vol[ch];
 				continue;
 			}
