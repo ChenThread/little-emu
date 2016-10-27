@@ -14,5 +14,7 @@ clang -O2 -g -shared -fPIC -o lbots/s2.so -Isrc bots/s2.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 clang -O2 -g -shared -fPIC -o lbots/tas.so -Isrc bots/tas.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
+clang -O2 -g -shared -fPIC -o lbots/corrupt.so -Isrc bots/corrupt.c \
+	`sdl2-config --cflags --libs` -lm -Wall && \
 true
 
