@@ -67,7 +67,6 @@ void sms_run_frame(struct SMS *sms)
 	const int pt_VINT = 684*(FRAME_START_Y+0xC1) + (94-18*2);
 
 	// Run a frame
-	/*
 	if(sms->timestamp == 0) {
 		sms->z80.timestamp = pt_VINT;// - (pt_VINT%684);
 		sms_run(sms, sms->timestamp + pt_VINT);
@@ -77,9 +76,8 @@ void sms_run_frame(struct SMS *sms)
 		sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
 		sms_run(sms, sms->timestamp + pt_VINT);
 	}
-	*/
-	sms_run(sms, sms->timestamp + pt_VINT);
-	sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
+	//sms_run(sms, sms->timestamp + pt_VINT);
+	//sms_run(sms, sms->timestamp + 684*SCANLINES-pt_VINT);
 
 	//sms_copy(&sms_prev, &sms_current);
 }
