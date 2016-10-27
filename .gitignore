@@ -1,6 +1,11 @@
 # ROMs
 *.sms
 
+# built stuff
+lsms
+*.so
+*.o
+
 # VIM
 .*.swp
 .*.swo
