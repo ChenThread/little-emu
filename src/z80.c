@@ -79,7 +79,7 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 
 		case 2: // PSG / V counter
 		case 3: // PSG / H counter
-			// TODO!
+			psg_write(&sms->psg, sms, timestamp, val);
 			break;
 
 		case 4: // VDP data

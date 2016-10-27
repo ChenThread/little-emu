@@ -14,6 +14,8 @@
 #define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*3)
 #endif
 
+#define PSG_OUT_BUF_LEN (1<<24)
+
 #define VDP_ADD_CYCLES(vdp, v) (vdp)->timestamp += ((v)*2)
 
 #define RB 0
@@ -83,6 +85,16 @@ struct VDP
 struct PSG
 {
 	// PSG state
+	uint16_t period[4];
+	uint32_t poffs[4];
+	uint16_t vol[4];
+	uint16_t onstate[4];
+	uint16_t lfsr_offs;
+	uint8_t lcmd;
+	uint8_t lnoise;
+
+	// Electrical state
+	int32_t outhpf_charge;
 	
 	// Tracking state
 	uint64_t timestamp;
@@ -110,6 +122,12 @@ struct SMS
 
 extern uint8_t sms_rom[4*1024*1024];
 extern bool sms_rom_is_banked;
+
+// psg.c
+void psg_pop_16bit_mono(int16_t *buf, size_t len);
+void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp);
+void psg_init(struct PSG *psg);
+void psg_write(struct PSG *psg, struct SMS *sms, uint64_t timestamp, uint8_t val);
 
 // sms.c
 void sms_init(struct SMS *sms);

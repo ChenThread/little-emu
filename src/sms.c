@@ -32,6 +32,7 @@ void sms_init(struct SMS *sms)
 	sms->hlatch = 0x80; // TODO: find out what this is on reset
 	z80_init(&(sms->z80));
 	vdp_init(&(sms->vdp));
+	psg_init(&(sms->psg));
 	//sms->z80.timestamp = 1;
 	//sms->vdp.timestamp = 0;
 
@@ -56,6 +57,7 @@ void sms_run(struct SMS *sms, uint64_t timestamp)
 		//printf("%016lX %016lX %016lX %016lX %016lX\n", timestamp, sms->z80.timestamp, sms->z80.timestamp_end, sms->vdp.timestamp, sms->vdp.timestamp_end);
 		z80_run(&(sms->z80), sms, sms->z80.timestamp_end);
 		vdp_run(&(sms->vdp), sms, sms->z80.timestamp_end);
+		psg_run(&(sms->psg), sms, sms->z80.timestamp_end);
 	}
 
 	sms->timestamp = timestamp;

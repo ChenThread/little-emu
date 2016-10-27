@@ -70,6 +70,10 @@ uint8_t input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 	return sms->joy[port&1];
 }
 
+void audio_callback_sdl(void *ud, Uint8 *stream, int len)
+{
+	psg_pop_16bit_mono((int16_t *)stream, len/2);
+}
 
 int main(int argc, char *argv[])
 {
@@ -125,7 +129,7 @@ int main(int argc, char *argv[])
 	sms_init(&sms_current);
 
 	// Set up SDL
-	SDL_Init(SDL_INIT_VIDEO);
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 	window = SDL_CreateWindow("littlesms",
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
@@ -142,11 +146,21 @@ int main(int argc, char *argv[])
 	signal(SIGINT,  SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
 
+	// Set up audio
+	SDL_AudioSpec au_want;
+	au_want.freq = 48000;
+	au_want.format = AUDIO_S16;
+	au_want.channels = 1;
+	au_want.samples = 2048;
+	au_want.callback = audio_callback_sdl;
+	SDL_OpenAudio(&au_want, NULL);
+
 	// Run
 	if(botlib_init != NULL) {
 		botlib_init();
 	}
 
+	SDL_PauseAudio(0);
 	twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
