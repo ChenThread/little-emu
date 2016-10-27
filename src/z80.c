@@ -69,7 +69,7 @@ static void z80_io_write(struct SMS *sms, uint64_t timestamp, uint16_t addr, uin
 				h >>= 2;
 				h &= 0xFF;
 				sms->hlatch = h;
-				//if(sms->z80.pc == 0x0C90 || sms->z80.pc == 0x0B59)
+				//if(sms->z80.pc == 0x0C90 || sms->z80.pc == 0x0B59 || sms->z80.pc == 0x0B12)
 				//printf("HC %04X = %02X\n", sms->z80.pc, h);
 			}
 
@@ -162,7 +162,7 @@ static uint8_t z80_io_read(struct SMS *sms, uint64_t timestamp, uint16_t addr)
 				uint32_t h = timestamp%(684ULL);
 				h = (h+684)%684;
 				h -= 94;
-				h += 2;
+				h += 3;
 				h >>= 2;
 				h &= 0xFF;
 				//printf("HC VDP %04X = %02X %02X\n", sms->z80.pc, h, sms->vdp.status);
@@ -942,6 +942,10 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 						| z80_parity(z80->gpr[RA]);
 				} break;
 
+				case 0x77: case 0x7F:
+					// NOPs
+					break;
+
 				//
 				// X=2
 				//
@@ -1323,9 +1327,9 @@ void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp)
 				} break;
 
 				default:
-					// TODO!
-					fprintf(stderr, "OP: ED %02X\n", op);
-					fflush(stderr); abort();
+					//fprintf(stderr, "OP: ED %02X\n", op);
+					//fflush(stderr); abort();
+					// NOP
 					break;
 			} continue;
 		}
