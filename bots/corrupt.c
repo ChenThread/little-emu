@@ -190,7 +190,23 @@ void bot_update()
 
 			if(s0_mismatch && s1_mismatch) {
 				// IMPORTANT CHECK.
-				assert(step != initial_step);
+				if(step == initial_step)
+				{
+					// Fix middle.
+					offs = step/2;
+					sms_copy(&broken_state, &sms_current);
+					memcpy(sms_rom, rom_main, sizeof(rom_main));
+					memcpy(sms_rom+offs+step, rom_backup+offs+step, step);
+					sms_run_frame(&broken_state);
+					bool s2_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
+					bool s2_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
+
+					s2_mismatch = s2_mismatch || s2_slip;
+					step >>= 1;
+					//assert(!s2_mismatch);
+					continue;
+
+				}
 
 				// Do not subdivide this.
 				break;
