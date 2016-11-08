@@ -1,20 +1,15 @@
 #include "common.h"
 
 void *botlib = NULL;
-void (*botlib_init)(void) = NULL;
+void (*botlib_init)(int argc, char *argv[]) = NULL;
 void (*botlib_update)(void) = NULL;
+uint8_t (*botlib_hook_input)(struct SMS *sms, uint64_t timestamp, int port) = NULL;
 
+#ifndef DEDI
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
-
-/*
-Sonic 1:
-0x13FD = X
-0x1400 = Y
-0x1403 = Xvel
-0x1406 = Yvel
-*/
+#endif
 
 void bot_update()
 {
@@ -25,6 +20,7 @@ void bot_update()
 
 uint8_t input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 {
+#ifndef DEDI
 	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
 
 	SDL_Event ev;
@@ -65,15 +61,17 @@ uint8_t input_fetch(struct SMS *sms, uint64_t timestamp, int port)
 		}
 	}
 	}
-
+#endif
 	//printf("OUTPUT: %02X\n", sms->joy[port&1]);
 	return sms->joy[port&1];
 }
 
+#ifndef DEDI
 void audio_callback_sdl(void *ud, Uint8 *stream, int len)
 {
 	psg_pop_16bit_mono((int16_t *)stream, len/2);
 }
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -86,10 +84,23 @@ int main(int argc, char *argv[])
 
 	// Load bot if available
 	if(argc > 2) {
+#ifdef DEDI
+		botlib = dlopen(argv[2], RTLD_NOW);
+		assert(botlib != NULL);
+		botlib_init = dlsym(botlib, "bot_init");
+		botlib_update = dlsym(botlib, "bot_update");
+		botlib_hook_input = dlsym(botlib, "bot_hook_input");
+#else
 		botlib = SDL_LoadObject(argv[2]);
 		assert(botlib != NULL);
 		botlib_init = SDL_LoadFunction(botlib, "bot_init");
 		botlib_update = SDL_LoadFunction(botlib, "bot_update");
+		botlib_hook_input = SDL_LoadFunction(botlib, "bot_hook_input");
+#endif
+	}
+
+	if(botlib_hook_input == NULL) {
+		botlib_hook_input = input_fetch;
 	}
 
 	sms_rom_is_banked = false;
@@ -306,6 +317,7 @@ int main(int argc, char *argv[])
 	// Set up SMS
 	sms_init(&sms_current);
 
+#ifndef DEDI
 	// Set up SDL
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 	window = SDL_CreateWindow("littlesms",
@@ -332,19 +344,23 @@ int main(int argc, char *argv[])
 	au_want.samples = 2048;
 	au_want.callback = audio_callback_sdl;
 	SDL_OpenAudio(&au_want, NULL);
+#endif
 
 	// Run
+	sms_current.ram[0] = 0xAB;
 	if(botlib_init != NULL) {
-		botlib_init();
+		botlib_init(argc-2, argv+2);
 	}
 
+#ifndef DEDI
 	SDL_PauseAudio(0);
+#endif
 	twait = time_now();
 	for(;;) {
 		struct SMS *sms = &sms_current;
 		struct SMS sms_ndsim;
-		sms->joy[0] = input_fetch(sms, sms->timestamp, 0);
-		sms->joy[1] = input_fetch(sms, sms->timestamp, 1);
+		sms->joy[0] = botlib_hook_input(sms, sms->timestamp, 0);
+		sms->joy[1] = botlib_hook_input(sms, sms->timestamp, 1);
 		bot_update();
 		sms_copy(&sms_ndsim, sms);
 		sms_run_frame(sms);
@@ -365,6 +381,7 @@ int main(int argc, char *argv[])
 			}
 		}
 
+#ifndef DEDI
 		if(!sms->no_draw)
 		{
 			// Draw + upscale
@@ -387,6 +404,7 @@ int main(int argc, char *argv[])
 			// Update
 			SDL_UpdateWindowSurface(window);
 		}
+#endif
 	}
 	
 	return 0;

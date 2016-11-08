@@ -1,8 +1,10 @@
 #include "common.h"
+#ifndef DEDI
 int16_t sound_data[PSG_OUT_BUF_LEN];
 static size_t sound_data_out_offs;
 static size_t sound_data_offs;
 static SDL_atomic_t sound_data_len;
+#endif
 
 static uint16_t psg_volumes[16] = {
 	16384, 13014, 10338, 8211 ,
@@ -44,6 +46,7 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 {
 	// TODO: proper interpolation
 
+#ifndef DEDI
 	// Get number of samples to read/write
 	size_t src_len = SDL_AtomicGet(&sound_data_len);
 #if USE_NTSC
@@ -92,6 +95,7 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 		sound_data_out_offs &= PSG_OUT_BUF_LEN-1;
 	}
 	SDL_AtomicAdd(&sound_data_len, -samples_to_read);
+#endif
 }
 
 void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
@@ -100,7 +104,9 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		return;
 	}
 
+#ifndef DEDI
 	uint64_t timediff = timestamp - psg->timestamp;
+#endif
 
 	// TODO: proper no_draw version
 	if(sms->no_draw) {
@@ -108,6 +114,7 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		return;
 	}
 
+#ifndef DEDI
 	for(uint64_t i = 0; i < timediff; i++) {
 		int32_t outval = 0;
 		for(int ch = 0; ch < 4; ch++) {
@@ -172,6 +179,7 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 	}
 	SDL_AtomicAdd(&sound_data_len, timediff);
 	//assert(SDL_AtomicGet(&sound_data_len) < PSG_OUT_BUF_LEN);
+#endif
 
 	psg->timestamp = timestamp;
 }

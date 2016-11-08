@@ -10,7 +10,11 @@
 #include <signal.h>
 #include <sys/time.h>
 
+#ifdef DEDI
+#include <dlfcn.h>
+#else
 #include <SDL.h>
+#endif
 
 #include "littlesms.h"
 
