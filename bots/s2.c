@@ -56,6 +56,7 @@ void bot_update()
 
 	bool shift_left = (SDL_GetModState() & KMOD_LSHIFT);
 	uint8_t old_j0 = sms_current.joy[0];
+	sms_current.joy[1] = 0xF2;
 
 	//printf("%3d\n", backlog_len);
 	if(shift_left && backlog_len > 3) {

@@ -29,5 +29,7 @@ clang -O2 -g -shared -fPIC -o lbots/corrupt.so -Isrc bots/corrupt.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 clang -O2 -g -shared -fPIC -o lbots/net.so -Isrc bots/net.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
+clang -O2 -g -shared -fPIC -o lbots/server-net.so -Isrc bots/net.c \
+	-DSERVER -lm -Wall && \
 true
 
