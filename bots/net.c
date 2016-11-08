@@ -94,6 +94,8 @@ static void kick_client(const char *reason, int cidx, void *maddr, socklen_t mad
 {
 	assert(reason[0] == '\x02');
 
+	printf("Kicking: \"%s\"\n", reason+1);
+
 	// Send message
 	sendto(sockfd, reason, strlen(reason)+1, 0,
 		(struct sockaddr *)maddr, maddr_len);
