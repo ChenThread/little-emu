@@ -96,7 +96,7 @@ static void kick_client(const char *reason, int cidx, void *maddr, socklen_t mad
 
 	// Send message
 	sendto(sockfd, reason, strlen(reason)+1, 0,
-		(struct sockaddr *)&maddr, maddr_len);
+		(struct sockaddr *)maddr, maddr_len);
 
 	// Check if client needs detachment
 	detach_client(cidx);
@@ -781,7 +781,7 @@ void bot_init(int argc, char *argv[])
 				break;
 			}
 
-			//printf("CMSG %d %02X\n", (int)rlen, mbuf[0]);
+			printf("CMSG %d %02X\n", (int)rlen, mbuf[0]);
 
 			if(mbuf[0] == '\x01') {
 				// We connected!

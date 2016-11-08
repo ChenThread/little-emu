@@ -56,7 +56,7 @@ struct Z80
 	// Tracking state
 	uint64_t timestamp;
 	uint64_t timestamp_end;
-};
+} __attribute__((__packed__));
 
 struct VDP
 {
@@ -80,7 +80,7 @@ struct VDP
 	// Tracking state
 	uint64_t timestamp;
 	uint64_t timestamp_end;
-};
+} __attribute__((__packed__));
 
 struct PSG
 {
@@ -99,7 +99,7 @@ struct PSG
 	// Tracking state
 	uint64_t timestamp;
 	uint64_t timestamp_end;
-};
+} __attribute__((__packed__));
 
 struct SMS
 {
@@ -118,7 +118,7 @@ struct SMS
 	bool no_draw;
 	uint64_t timestamp;
 	uint64_t timestamp_end;
-};
+} __attribute__((__packed__));
 
 extern uint8_t sms_rom[4*1024*1024];
 extern bool sms_rom_is_banked;
