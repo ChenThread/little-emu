@@ -221,11 +221,13 @@ void bot_update()
 
 #ifdef SERVER
 	// Do a quick check
-	if(player_cli[0] < 0 && player_cli[1] >= 0) {
-		player_frame_idx[0] = backlog_end;
-	}
-	if(player_cli[1] < 0 && player_cli[0] >= 0) {
-		player_frame_idx[1] = backlog_end;
+	if(player_cli[0] >= 0 || player_cli[1] >= 0) {
+		if(player_cli[0] < 0) {
+			player_frame_idx[0] = backlog_end;
+		}
+		if(player_cli[1] < 0) {
+			player_frame_idx[1] = backlog_end;
+		}
 	}
 
 	// Get messages
@@ -462,6 +464,11 @@ void bot_update()
 					continue;
 				}
 
+				// Advance end of input marker
+				if((int32_t)(in_end-player_input_end[pidx]) > 0) {
+					player_input_end[pidx] = in_end;
+				}
+
 				// Check if we fill gaps
 				if(player_input_gap_beg[pidx] != player_input_gap_end[pidx]) {
 					int32_t gdbeg = (int32_t)(in_beg-player_input_gap_beg[pidx]);
@@ -509,10 +516,11 @@ void bot_update()
 				}
 
 				// Advance if necessary
-				int32_t pfdelta = (int32_t)(in_end-player_frame_idx[pidx]);
+				int32_t pfdelta = (int32_t)(
+					player_input_end[pidx]-player_frame_idx[pidx]);
 				if(pfdelta > 0) {
-					player_frame_idx[pidx] = in_end;
-					//printf("Advance %d\n", in_end);
+					player_frame_idx[pidx] = player_input_end[pidx];
+					//printf("Advance %d\n", player_input_end[pidx]);
 				}
 
 				// Set inputs
