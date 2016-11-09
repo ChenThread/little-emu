@@ -22,28 +22,35 @@
 #define BACKLOG_CAP 4096
 #define PLAYER_MAX 2
 
+static const uint64_t keepalive_period = 1000000;
+static const uint64_t keepalive_death  = 4000000;
+
 static int sockfd;
 #ifdef SERVER
 #define CLIENT_MAX 256
+static uint64_t cli_keepalive_recv[CLIENT_MAX];
+static uint64_t cli_keepalive_send;
 static uint32_t cli_player[CLIENT_MAX];
 static struct sockaddr *cli_addr[CLIENT_MAX];
 static socklen_t cli_addrlen[CLIENT_MAX];
 static int32_t player_cli[PLAYER_MAX] = {-1, -1};
 static uint32_t player_initial_frame_idx[PLAYER_MAX];
 static uint32_t player_frame_idx[PLAYER_MAX];
-uint32_t player_input_beg[PLAYER_MAX];
-uint32_t player_input_end[PLAYER_MAX];
-uint32_t player_input_gap_beg[PLAYER_MAX];
-uint32_t player_input_gap_end[PLAYER_MAX];
+static uint32_t player_input_beg[PLAYER_MAX];
+static uint32_t player_input_end[PLAYER_MAX];
+static uint32_t player_input_gap_beg[PLAYER_MAX];
+static uint32_t player_input_gap_end[PLAYER_MAX];
 #else
 static struct sockaddr *serv_addr;
 static socklen_t serv_addrlen;
-uint32_t serv_frame_idx;
+static uint64_t serv_keepalive_recv;
+static uint64_t serv_keepalive_send;
+static uint32_t serv_frame_idx;
 uint32_t serv_frame_arrived[BACKLOG_CAP];
-uint32_t serv_input_beg = 0;
-uint32_t serv_input_end = 0;
-uint32_t serv_input_gap_beg = 0;
-uint32_t serv_input_gap_end = 0;
+static uint32_t serv_input_beg = 0;
+static uint32_t serv_input_end = 0;
+static uint32_t serv_input_gap_beg = 0;
+static uint32_t serv_input_gap_end = 0;
 static uint32_t initial_backlog = 0;
 #endif
 
@@ -225,6 +232,7 @@ void bot_update()
 	printf("=== SFrame %d\n", backlog_end);
 	for(;;)
 	{
+		uint64_t now = time_now();
 		bool jump_out = false;
 
 		// Ensure that we are ahead of both players
@@ -235,6 +243,26 @@ void bot_update()
 		if((wldiff0 < 0 || wldiff1 < 0) && (player_cli[0] >= 0 || player_cli[1] >= 0)) {
 			//printf("jump-out activated\n");
 			jump_out = true;
+		}
+
+		// Send keepalives if necessary
+		if(TIME_IN_ORDER(cli_keepalive_send, now)) {
+			for(int ci = 0; ci < CLIENT_MAX; ci++) {
+				if(cli_addrlen[ci] != 0 &&
+					TIME_IN_ORDER(cli_keepalive_recv[ci]+keepalive_death
+						, now)) {
+
+					kick_client("\x02""Timed out", ci,
+						cli_addr[ci], cli_addrlen[ci]);
+
+				} else if(cli_addrlen[ci] != 0 &&
+					TIME_IN_ORDER(cli_keepalive_recv[ci], now)) {
+
+					sendto(sockfd, "\x00", 1, 0,
+						cli_addr[ci], cli_addrlen[ci]);
+					cli_keepalive_send = now + keepalive_period;
+				}
+			}
 		}
 
 		for(;;) {
@@ -259,6 +287,7 @@ void bot_update()
 					&& !memcmp(cli_addr[i], maddr, cli_addrlen[i])) {
 
 					cidx = i;
+					cli_keepalive_recv[cidx] = now+keepalive_period;
 					break;
 				}
 			}
@@ -324,6 +353,7 @@ void bot_update()
 					? backlog_end
 					: player_frame_idx[pidx]);
 				((int32_t *)(sintro_buf+1))[1] = pidx;
+				cli_keepalive_recv[cidx] = now+keepalive_period;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
 					(struct sockaddr *)&maddr, maddr_len);
 
@@ -526,6 +556,19 @@ void bot_update()
 	}
 #else
 
+	// Perform keepalive
+	uint64_t now = time_now();
+	if(TIME_IN_ORDER(serv_keepalive_send, now)) {
+		if(TIME_IN_ORDER(serv_keepalive_recv+keepalive_death, now)) {
+			assert(!"connection timed out");
+			abort();
+		} else {
+			sendto(sockfd, "\x00", 1, 0,
+				serv_addr, serv_addrlen);
+			serv_keepalive_send += keepalive_period;
+		}
+	}
+
 	// Get messages
 	for(;;)
 	{
@@ -553,6 +596,7 @@ void bot_update()
 			break;
 		}
 
+		serv_keepalive_recv = now+keepalive_period;
 		//printf("CMSG %d %02X\n", (int)rlen, mbuf[0]);
 
 		if(mbuf[0] == '\x01') {
@@ -848,6 +892,7 @@ void bot_init(int argc, char *argv[])
 	freeaddrinfo(ai);
 
 	printf("Server is now online!\n\n");
+	cli_keepalive_send = time_now();
 #else
 	if(argc <= 2) {
 		fprintf(stderr, "usage: %s hostname port\n", argv[0]);
@@ -1043,6 +1088,7 @@ void bot_init(int argc, char *argv[])
 	}
 
 	printf("State is now synced. Let's go.\n");
+	serv_keepalive_recv = serv_keepalive_send = time_now();
 #endif
 	printf("ROM CRC: %04X\n", sms_rom_crc);
 
