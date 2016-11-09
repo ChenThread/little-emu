@@ -40,10 +40,15 @@ static uint32_t initial_backlog = 0;
 #endif
 
 // a minute should be long enough
+#define BLWRAP(i) ((i) & (BACKLOG_CAP-1))
 static struct SMS backlog[BACKLOG_CAP];
 static uint8_t input_log[BACKLOG_CAP][2];
 uint16_t input_pmask[BACKLOG_CAP];
-static uint32_t backlog_idx = 0;
+static uint32_t backlog_end = 0;
+uint32_t input_beg = 0;
+uint32_t input_end = 0;
+uint32_t input_gap_beg = 0;
+uint32_t input_gap_end = 0;
 
 static uint8_t net_intro_packet[13];
 
@@ -188,34 +193,40 @@ uint8_t bot_hook_input(struct SMS *sms, uint64_t timestamp, int port)
 void bot_update()
 {
 	// Save backlog frame (for sync purposes)
-	sms_copy(&backlog[backlog_idx & (BACKLOG_CAP-1)], &sms_current);
+	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
 
-#ifndef SERVER
 	// Save frame input
-	input_log[backlog_idx & (BACKLOG_CAP-1)][0] = sms_current.joy[0];
-	input_log[backlog_idx & (BACKLOG_CAP-1)][1] = sms_current.joy[1];
-	input_pmask[backlog_idx & (BACKLOG_CAP-1)] |= player_control;
+#ifdef SERVER
+	input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
+	input_log[BLWRAP(backlog_end)][1] = sms_current.joy[1];
+	input_pmask[BLWRAP(backlog_end)] |= player_control;
+#else
+	if(player_id >= 0) {
+		input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
+		input_log[BLWRAP(backlog_end)][1] = sms_current.joy[1];
+	}
+	input_pmask[BLWRAP(backlog_end)] = 0;
 #endif
 
 #ifdef SERVER
 	// Do a quick check
 	if(player_cli[0] < 0) {
-		player_frame_idx[0] = backlog_idx;
+		player_frame_idx[0] = backlog_end;
 	}
 	if(player_cli[1] < 0) {
-		player_frame_idx[1] = backlog_idx;
+		player_frame_idx[1] = backlog_end;
 	}
 
 	// Get messages
-	printf("=== SFrame %d\n", backlog_idx);
+	printf("=== SFrame %d\n", backlog_end);
 	for(;;)
 	{
 		bool jump_out = false;
 
 		// Ensure that we are ahead of both players
 		// Unless we have no players, in which case wait until we have players
-		int32_t wldiff0 = (int32_t)(backlog_idx-player_frame_idx[0]);
-		int32_t wldiff1 = (int32_t)(backlog_idx-player_frame_idx[1]);
+		int32_t wldiff0 = (int32_t)(backlog_end-player_frame_idx[0]);
+		int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
 		//printf("wldiffs %d %d\n", wldiff0, wldiff1);
 		if((wldiff0 < 0 || wldiff1 < 0) && (player_cli[0] >= 0 || player_cli[1] >= 0)) {
 			//printf("jump-out activated\n");
@@ -291,8 +302,8 @@ void bot_update()
 				printf("client %5d -> player %5d\n", cidx, pidx);
 				if(pidx != -1) {
 					player_cli[pidx] = cidx;
-					player_frame_idx[pidx] = backlog_idx;
-					player_initial_frame_idx[pidx] = backlog_idx;
+					player_frame_idx[pidx] = backlog_end;
+					player_initial_frame_idx[pidx] = backlog_end;
 				}
 				cli_addrlen[cidx] = maddr_len;
 				cli_addr[cidx] = malloc(maddr_len);
@@ -302,7 +313,7 @@ void bot_update()
 				uint8_t sintro_buf[9];
 				sintro_buf[0] = 0x01;
 				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
-					? backlog_idx
+					? backlog_end
 					: player_frame_idx[pidx]);
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
@@ -319,7 +330,7 @@ void bot_update()
 				uint8_t sintro_buf[9];
 				sintro_buf[0] = 0x01;
 				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
-					? backlog_idx
+					? backlog_end
 					: player_frame_idx[pidx]);
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
@@ -347,7 +358,7 @@ void bot_update()
 
 				mbuf[0] = 0x04;
 				uint8_t *ps = mbuf+11;
-				uint8_t *pd = (uint8_t *)&backlog[frame_idx&(BACKLOG_CAP-1)];
+				uint8_t *pd = (uint8_t *)&backlog[BLWRAP(frame_idx)];
 				memcpy(ps, pd+offs, len);
 				sendto(sockfd, mbuf, 11+len, 0,
 					(struct sockaddr *)&maddr, maddr_len);
@@ -357,15 +368,15 @@ void bot_update()
 				uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
 
 				// Of course, we have to have the inputs available...
-				if((backlog_idx-in_beg) >= BACKLOG_CAP-1) {
+				if((backlog_end-in_beg) >= BACKLOG_CAP-1) {
 					kick_client("\x02""End of backlog reached", cidx, maddr, maddr_len);
 					continue;
 				}
 
 				// Get length and clamp max at now / clamp max at max
 				uint32_t in_len = mbuf[5];
-				if((int32_t)(backlog_idx-(in_beg+in_len)) < 0) {
-					in_len = backlog_idx-in_beg;
+				if((int32_t)(backlog_end-(in_beg+in_len)) < 0) {
+					in_len = backlog_end-in_beg;
 				}
 
 				// Skip if length == 0
@@ -380,8 +391,8 @@ void bot_update()
 				mbuf[5] = in_len;
 				uint8_t *p = &mbuf[6];
 				for(uint32_t i = 0; i < in_len; i++) {
-					p[i*2+0] = input_log[(in_beg+i)&(BACKLOG_CAP-1)][0];
-					p[i*2+1] = input_log[(in_beg+i)&(BACKLOG_CAP-1)][1];
+					p[i*2+0] = input_log[BLWRAP((in_beg+i))][0];
+					p[i*2+1] = input_log[BLWRAP((in_beg+i))][1];
 				}
 
 				// Send it!
@@ -400,7 +411,7 @@ void bot_update()
 				uint32_t len = mbuf[5];
 
 				// Ensure we are in range
-				int32_t fdelta0 = (int32_t)(frame_idx-backlog_idx);
+				int32_t fdelta0 = (int32_t)(frame_idx-backlog_end);
 				int32_t fdelta1 = fdelta0+len;
 				if(fdelta0 >= BACKLOG_CAP/4 || -fdelta0 >= BACKLOG_CAP-1) {
 					kick_client("\x02""Frame out of range", cidx, maddr, maddr_len);
@@ -422,7 +433,7 @@ void bot_update()
 				mbuf[0] = 0x06;
 				uint8_t *p = mbuf+6;
 				for(int i = 0; i < len; i++) {
-					int idx = (frame_idx+i)&(BACKLOG_CAP-1);
+					int idx = BLWRAP(frame_idx+i);
 					uint8_t old0 = input_log[idx][0];
 					uint8_t old1 = input_log[idx][1];
 					uint8_t m0 = player_masks[pidx][0];
@@ -472,7 +483,7 @@ void bot_update()
 		if(rlen < 0) {
 			if(player_id < 0) {
 				// Wait for messages
-				if((int32_t)(backlog_idx-serv_frame_idx) >= 0) {
+				if((int32_t)(backlog_end-serv_frame_idx) >= 0) {
 					usleep(1000);
 					continue;
 				}
@@ -493,7 +504,7 @@ void bot_update()
 			printf("Acknowledged! Again!\n");
 			initial_backlog = ((uint32_t *)(mbuf+1))[0];
 			player_id = ((int32_t *)(mbuf+1))[1];
-			backlog_idx = initial_backlog;
+			backlog_end = initial_backlog;
 			player_control = ((player_id >= 0 && player_id <= 31)
 				? (1<<player_id) : 0);
 
@@ -516,12 +527,12 @@ void bot_update()
 			uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
 
 			// Of course, we have to have the inputs available...
-			assert(!((backlog_idx-in_beg) >= BACKLOG_CAP-1));
+			assert(!((backlog_end-in_beg) >= BACKLOG_CAP-1));
 
 			// Get length and clamp max at now / clamp max at max
 			uint32_t in_len = mbuf[5];
-			if((int32_t)(backlog_idx-(in_beg+in_len)) < 0) {
-				in_len = backlog_idx-in_beg;
+			if((int32_t)(backlog_end-(in_beg+in_len)) < 0) {
+				in_len = backlog_end-in_beg;
 			}
 
 			// Skip if length == 0
@@ -536,8 +547,8 @@ void bot_update()
 			mbuf[5] = in_len;
 			uint8_t *p = &mbuf[6];
 			for(uint32_t i = 0; i < in_len; i++) {
-				p[i*2+0] = input_log[(in_beg+i)&(BACKLOG_CAP-1)][0];
-				p[i*2+1] = input_log[(in_beg+i)&(BACKLOG_CAP-1)][1];
+				p[i*2+0] = input_log[BLWRAP((in_beg+i))][0];
+				p[i*2+1] = input_log[BLWRAP((in_beg+i))][1];
 			}
 
 			// Send it!
@@ -549,12 +560,13 @@ void bot_update()
 			uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
 			uint32_t in_len = mbuf[5];
 			uint8_t *p = &mbuf[6];
-			printf("INPUT %10d %3d\n", in_beg, in_len);
+			printf("INPUT %10d %3d %10d %10d\n"
+				, in_beg, in_len, in_beg+in_len, backlog_end);
 
 			uint8_t m0 = (player_id >= 0 ? player_masks[player_id][0] : 0x00);
 			uint8_t m1 = (player_id >= 0 ? player_masks[player_id][1] : 0x00);
 			for(int i = 0; i < in_len; i++) {
-				int idx = (in_beg+i) & (BACKLOG_CAP-1);
+				int idx = BLWRAP(in_beg+i);
 				/*
 				input_log[idx][0] &= m0;
 				input_log[idx][1] &= m1;
@@ -567,10 +579,11 @@ void bot_update()
 				backlog[idx].joy[1] = input_log[idx][1];
 			}
 
-			//assert(!((backlog_idx-in_beg) >= BACKLOG_CAP-1));
+			//assert(!((backlog_end-in_beg) >= BACKLOG_CAP-1));
 
 			// FIXME do this properly to avoid desyncs
-			int idx = (backlog_idx) & (BACKLOG_CAP-1);
+			/*
+			int idx = BLWRAP(backlog_end);
 			input_log[idx][0] &= m0;
 			input_log[idx][1] &= m1;
 			input_log[idx][0] |= p[(in_len-1)*2+0] & ~m0;
@@ -581,6 +594,7 @@ void bot_update()
 				, backlog[idx].joy[0]
 				, backlog[idx].joy[1]
 				);
+			*/
 
 			// Also, server is now ahead
 			serv_frame_idx = in_beg+in_len;
@@ -588,7 +602,7 @@ void bot_update()
 	}
 #endif
 
-	uint32_t idx = (backlog_idx&(BACKLOG_CAP-1));
+	uint32_t idx = BLWRAP(backlog_end);
 
 	// Restore frame input
 	sms_current.joy[0] = input_log[idx][0];
@@ -600,7 +614,7 @@ void bot_update()
 		// TODO: batch these!
 		uint8_t myinputpkt[8];
 		myinputpkt[0] = 0x06;
-		((uint32_t *)(myinputpkt+1))[0] = idx;
+		((uint32_t *)(myinputpkt+1))[0] = backlog_end;
 		myinputpkt[5] = 0x01;
 		myinputpkt[6] = input_log[idx][0];
 		myinputpkt[7] = input_log[idx][1];
@@ -613,14 +627,14 @@ void bot_update()
 	backlog[idx].joy[0] = input_log[idx][0];
 	backlog[idx].joy[1] = input_log[idx][1];
 	sms_copy(&sms_current, &backlog[idx]);
-	backlog_idx++;
+	backlog_end++;
 
 #ifndef SERVER
 
 	// If spectator, play catchup if too far behind
 	if(player_id < 0) {
-		printf("***** SPEC %d\n", backlog_idx);
-		if((int32_t)(serv_frame_idx-backlog_idx) >= 20) {
+		printf("***** SPEC %d\n", backlog_end);
+		if((int32_t)(serv_frame_idx-backlog_end) >= 20) {
 			twait = time_now()-FRAME_WAIT*15;
 		}
 	}
@@ -790,7 +804,7 @@ void bot_init(int argc, char *argv[])
 				assert(rlen == 9);
 				initial_backlog = ((uint32_t *)(mbuf+1))[0];
 				player_id = ((int32_t *)(mbuf+1))[1];
-				backlog_idx = initial_backlog;
+				backlog_end = initial_backlog;
 				player_control = ((player_id >= 0 && player_id <= 31)
 					? (1<<player_id) : 0);
 				printf("Acknowledged! id=%02d control=%08X\n"
@@ -823,7 +837,7 @@ void bot_init(int argc, char *argv[])
 
 		uint8_t pktbuf[11];
 		pktbuf[0] = 0x03;
-		*((uint32_t *)(pktbuf+1)) = backlog_idx;
+		*((uint32_t *)(pktbuf+1)) = backlog_end;
 		*((uint32_t *)(pktbuf+5)) = i;
 		*((uint16_t *)(pktbuf+9)) = nlen;
 		sendto(sockfd, pktbuf, sizeof(pktbuf), 0, serv_addr, serv_addrlen);
@@ -903,7 +917,7 @@ void bot_init(int argc, char *argv[])
 					if(need_byte) {
 						uint8_t pktbuf[11];
 						pktbuf[0] = 0x03;
-						*((uint32_t *)(pktbuf+1)) = backlog_idx;
+						*((uint32_t *)(pktbuf+1)) = backlog_end;
 						*((uint32_t *)(pktbuf+5)) = i;
 						*((uint16_t *)(pktbuf+9)) = nlen;
 						sendto(sockfd, pktbuf, sizeof(pktbuf), 0, serv_addr, serv_addrlen);
