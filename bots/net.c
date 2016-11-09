@@ -221,10 +221,10 @@ void bot_update()
 
 #ifdef SERVER
 	// Do a quick check
-	if(player_cli[0] < 0) {
+	if(player_cli[0] < 0 && player_cli[1] >= 0) {
 		player_frame_idx[0] = backlog_end;
 	}
-	if(player_cli[1] < 0) {
+	if(player_cli[1] < 0 && player_cli[0] >= 0) {
 		player_frame_idx[1] = backlog_end;
 	}
 
@@ -351,7 +351,7 @@ void bot_update()
 				sintro_buf[0] = 0x01;
 				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
 					? backlog_end
-					: player_frame_idx[pidx]);
+					: player_initial_frame_idx[pidx]);
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				cli_keepalive_recv[cidx] = now+keepalive_period;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
@@ -369,7 +369,7 @@ void bot_update()
 				sintro_buf[0] = 0x01;
 				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
 					? backlog_end
-					: player_frame_idx[pidx]);
+					: player_initial_frame_idx[pidx]);
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
 					(struct sockaddr *)&maddr, maddr_len);
