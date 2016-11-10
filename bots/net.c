@@ -36,6 +36,7 @@ static struct sockaddr *cli_addr[CLIENT_MAX];
 static socklen_t cli_addrlen[CLIENT_MAX];
 static int32_t player_cli[PLAYER_MAX] = {-1, -1};
 static uint32_t player_frame_idx[PLAYER_MAX];
+static const uint32_t initial_backlog = 0;
 #else
 static struct sockaddr *serv_addr;
 static socklen_t serv_addrlen;
@@ -211,36 +212,38 @@ void bot_update()
 	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
 
 	// Send CRC32
-	{
-		uint8_t i0 = backlog[BLWRAP(backlog_end)].joy[0];
-		uint8_t i1 = backlog[BLWRAP(backlog_end)].joy[1];
-		backlog[BLWRAP(backlog_end)].joy[0] = 0xFF;
-		backlog[BLWRAP(backlog_end)].joy[1] = 0xFF;
+	// And no we do NOT want to do a wrap check here
+	if((uint32_t)(backlog_end-initial_backlog) >= 2) {
+		uint32_t frame_idx = backlog_end-2;
+		uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
+		uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
+		backlog[BLWRAP(frame_idx)].joy[0] = 0xFF;
+		backlog[BLWRAP(frame_idx)].joy[1] = 0xFF;
 		uint8_t crcpkt[31];
 		crcpkt[0] = 0x08;
-		*(uint32_t *)(crcpkt+1) = backlog_end;
+		*(uint32_t *)(crcpkt+1) = frame_idx;
 		*(uint32_t *)(crcpkt+5) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)],
+			(uint8_t *)&backlog[BLWRAP(frame_idx)],
 			sizeof(struct SMS), 0);
 		*(uint32_t *)(crcpkt+9) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)].z80,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].z80,
 			sizeof(struct Z80), 0);
 		*(uint32_t *)(crcpkt+13) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)].psg,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].psg,
 			sizeof(struct PSG), 0);
 		*(uint32_t *)(crcpkt+17) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)].vdp,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp,
 			sizeof(struct VDP), 0);
 		*(uint32_t *)(crcpkt+21) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)].ram,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
 			8192, 0);
 		*(uint32_t *)(crcpkt+25) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(backlog_end)].vram,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
 			16384, 0);
 		crcpkt[29] = i0;
 		crcpkt[30] = i1;
-		backlog[BLWRAP(backlog_end)].joy[0] = i0;
-		backlog[BLWRAP(backlog_end)].joy[1] = i1;
+		backlog[BLWRAP(frame_idx)].joy[0] = i0;
+		backlog[BLWRAP(frame_idx)].joy[1] = i1;
 
 #ifdef SERVER
 		for(int ci = 0; ci < CLIENT_MAX; ci++) {
@@ -533,7 +536,7 @@ void bot_update()
 			} else if(mbuf[0] == '\x08') {
 				// State CRC32
 				uint32_t frame_idx = *(uint32_t *)(mbuf+1);
-				if((int32_t)(frame_idx-backlog_end) >= -1) {
+				if((int32_t)(frame_idx-backlog_end) >= 0) {
 					continue;
 				}
 				uint8_t crcpkt[31];
@@ -800,10 +803,6 @@ void bot_update()
 #endif
 
 	uint32_t idx = BLWRAP(backlog_end);
-
-	// Restore frame input
-	sms_current.joy[0] = input_log[idx][0];
-	sms_current.joy[1] = input_log[idx][1];
 
 #ifndef SERVER
 	if(player_id >= 0) {
