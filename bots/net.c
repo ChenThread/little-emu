@@ -491,7 +491,8 @@ void bot_update()
 				}
 
 				// Check for gaps
-				if(in_beg > backlog_end) {
+				int32_t ebldelta = (in_beg-backlog_end);
+				if(ebldelta > 0) {
 					// Check if we've detected a gap already
 					if(player_input_gap_beg[pidx] == player_input_gap_end[pidx]) {
 						player_input_gap_beg[pidx] = backlog_end;
@@ -511,16 +512,15 @@ void bot_update()
 					sendto(sockfd, fillgappkt, sizeof(fillgappkt), 0,
 						cli_addr[cidx], cli_addrlen[cidx]);
 
-					// SKIP
-					continue;
-				}
+				} else {
+					// Advance if necessary
+					int32_t pfdelta = (int32_t)(
+						player_input_end[pidx]-player_frame_idx[pidx]);
+					if(pfdelta > 0 && ebldelta > 0) {
+						player_frame_idx[pidx] = player_input_end[pidx];
+						printf("Advance %d\n", player_frame_idx[pidx]);
+					}
 
-				// Advance if necessary
-				int32_t pfdelta = (int32_t)(
-					player_input_end[pidx]-player_frame_idx[pidx]);
-				if(pfdelta > 0) {
-					player_frame_idx[pidx] = player_input_end[pidx];
-					//printf("Advance %d\n", player_input_end[pidx]);
 				}
 
 				// Set inputs
@@ -544,12 +544,14 @@ void bot_update()
 				}
 				//printf("%3d INPUT\n", pidx);
 
-				// Send it to the other clients!
-				for(int ci = 0; ci < CLIENT_MAX; ci++) {
-					//if(cli_addrlen[ci] != 0 && ci != cidx) {
-					if(cli_addrlen[ci] != 0 && ci != cidx) {
-						sendto(sockfd, mbuf, 6+2*in_len, 0,
-							cli_addr[ci], cli_addrlen[ci]);
+				if(ebldelta <= 0) {
+					// Send it to the other clients!
+					for(int ci = 0; ci < CLIENT_MAX; ci++) {
+						//if(cli_addrlen[ci] != 0 && ci != cidx) {
+						if(cli_addrlen[ci] != 0 && ci != cidx) {
+							sendto(sockfd, mbuf, 6+2*in_len, 0,
+								cli_addr[ci], cli_addrlen[ci]);
+						}
 					}
 				}
 
@@ -694,7 +696,8 @@ void bot_update()
 			}
 
 			// Check for gaps
-			if(in_beg > backlog_end) {
+			int32_t ebldelta = (in_beg-backlog_end);
+			if(ebldelta > 0) {
 				// Check if we've detected a gap already
 				if(serv_input_gap_beg == serv_input_gap_end) {
 					serv_input_gap_beg = backlog_end;
