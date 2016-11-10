@@ -35,7 +35,6 @@ static uint32_t cli_frame_idx[CLIENT_MAX];
 static struct sockaddr *cli_addr[CLIENT_MAX];
 static socklen_t cli_addrlen[CLIENT_MAX];
 static int32_t player_cli[PLAYER_MAX] = {-1, -1};
-static uint32_t player_initial_frame_idx[PLAYER_MAX];
 static uint32_t player_frame_idx[PLAYER_MAX];
 #else
 static struct sockaddr *serv_addr;
@@ -231,6 +230,9 @@ void bot_update()
 
 		// Ensure that we are ahead of both players
 		// Unless we have no players, in which case wait until we have players
+		//
+		// TODO: change this so we keep parity with the player falling behind
+		// This way we can avoid resyncing on the server
 		int32_t wldiff0 = (int32_t)(backlog_end-player_frame_idx[0]);
 		int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
 		//printf("wldiffs %d %d\n", wldiff0, wldiff1);
@@ -329,8 +331,6 @@ void bot_update()
 				printf("client %5d -> player %5d\n", cidx, pidx);
 				if(pidx != -1) {
 					player_cli[pidx] = cidx;
-					player_frame_idx[pidx] = backlog_end;
-					player_initial_frame_idx[pidx] = backlog_end;
 				}
 				cli_frame_idx[cidx] = backlog_end;
 				cli_addrlen[cidx] = maddr_len;
@@ -340,9 +340,7 @@ void bot_update()
 				// Send intro
 				uint8_t sintro_buf[9];
 				sintro_buf[0] = 0x01;
-				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
-					? backlog_end
-					: player_initial_frame_idx[pidx]);
+				((uint32_t *)(sintro_buf+1))[0] = cli_frame_idx[cidx];
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				cli_keepalive_recv[cidx] = now+keepalive_period;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
@@ -358,9 +356,7 @@ void bot_update()
 
 				uint8_t sintro_buf[9];
 				sintro_buf[0] = 0x01;
-				((uint32_t *)(sintro_buf+1))[0] = (pidx == -1
-					? backlog_end
-					: player_initial_frame_idx[pidx]);
+				((uint32_t *)(sintro_buf+1))[0] = cli_frame_idx[cidx];
 				((int32_t *)(sintro_buf+1))[1] = pidx;
 				sendto(sockfd, sintro_buf, sizeof(sintro_buf), 0,
 					(struct sockaddr *)&maddr, maddr_len);
@@ -546,11 +542,12 @@ void bot_update()
 		if(mbuf[0] == '\x01') {
 			// We connected! Again!
 			printf("Acknowledged! Again!\n");
-			initial_backlog = ((uint32_t *)(mbuf+1))[0];
-			player_id = ((int32_t *)(mbuf+1))[1];
-			backlog_end = initial_backlog;
-			player_control = ((player_id >= 0 && player_id <= 31)
-				? (1<<player_id) : 0);
+			// This time we just ignore everything
+			//initial_backlog = ((uint32_t *)(mbuf+1))[0];
+			//player_id = ((int32_t *)(mbuf+1))[1];
+			//backlog_end = initial_backlog;
+			//player_control = ((player_id >= 0 && player_id <= 31)
+				//? (1<<player_id) : 0);
 
 		} else if(mbuf[0] == '\x02') {
 			// The server hates us!
