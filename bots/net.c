@@ -216,7 +216,7 @@ void bot_update()
 		uint8_t i1 = backlog[BLWRAP(backlog_end)].joy[1];
 		backlog[BLWRAP(backlog_end)].joy[0] = 0xFF;
 		backlog[BLWRAP(backlog_end)].joy[1] = 0xFF;
-		uint8_t crcpkt[29];
+		uint8_t crcpkt[31];
 		crcpkt[0] = 0x08;
 		*(uint32_t *)(crcpkt+1) = backlog_end;
 		*(uint32_t *)(crcpkt+5) = crc32_sms_net(
@@ -237,6 +237,8 @@ void bot_update()
 		*(uint32_t *)(crcpkt+25) = crc32_sms_net(
 			(uint8_t *)&backlog[BLWRAP(backlog_end)].vram,
 			16384, 0);
+		crcpkt[29] = i0;
+		crcpkt[30] = i1;
 		backlog[BLWRAP(backlog_end)].joy[0] = i0;
 		backlog[BLWRAP(backlog_end)].joy[1] = i1;
 
@@ -534,7 +536,7 @@ void bot_update()
 				if((int32_t)(frame_idx-backlog_end) >= -1) {
 					continue;
 				}
-				uint8_t crcpkt[29];
+				uint8_t crcpkt[31];
 				crcpkt[0] = 0x08;
 				uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
 				uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
@@ -559,6 +561,8 @@ void bot_update()
 				*(uint32_t *)(crcpkt+25) = crc32_sms_net(
 					(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
 					16384, 0);
+				crcpkt[29] = i0;
+				crcpkt[30] = i1;
 				backlog[BLWRAP(frame_idx)].joy[0] = i0;
 				backlog[BLWRAP(frame_idx)].joy[1] = i1;
 
@@ -579,6 +583,8 @@ void bot_update()
 					printf("got RAM CRC = %08X\n", *(uint32_t *)(mbuf+21));
 					printf("exp VRAM CRC = %08X\n", *(uint32_t *)(crcpkt+25));
 					printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
+					printf("exp input = %02X %02X\n", crcpkt[29], crcpkt[30]);
+					printf("got input = %02X %02X\n", mbuf[29], mbuf[30]);
 					fflush(stdout);
 					kick_client("\x02""CRC mismatch", cidx,
 						cli_addr[cidx], cli_addrlen[cidx]);
@@ -620,7 +626,7 @@ void bot_update()
 		if(rlen < 0) {
 			if(player_id < 0) {
 				// Wait for messages
-				if((int32_t)(backlog_end-serv_frame_idx) >= 0) {
+				if((int32_t)(backlog_end-serv_frame_idx) >= -1) {
 					usleep(1000);
 					continue;
 				}
@@ -736,7 +742,7 @@ void bot_update()
 			if((int32_t)(frame_idx-backlog_end) >= -1) {
 				continue;
 			}
-			uint8_t crcpkt[29];
+			uint8_t crcpkt[31];
 			crcpkt[0] = 0x08;
 			uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
 			uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
@@ -761,6 +767,8 @@ void bot_update()
 			*(uint32_t *)(crcpkt+25) = crc32_sms_net(
 				(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
 				16384, 0);
+			crcpkt[29] = i0;
+			crcpkt[30] = i1;
 			backlog[BLWRAP(frame_idx)].joy[0] = i0;
 			backlog[BLWRAP(frame_idx)].joy[1] = i1;
 
@@ -781,6 +789,8 @@ void bot_update()
 				printf("got RAM CRC = %08X\n", *(uint32_t *)(mbuf+21));
 				printf("exp VRAM CRC = %08X\n", *(uint32_t *)(crcpkt+25));
 				printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
+				printf("exp input = %02X %02X\n", crcpkt[29], crcpkt[30]);
+				printf("got input = %02X %02X\n", mbuf[29], mbuf[30]);
 				fflush(stdout);
 				assert(!"CRC mismatch!");
 				abort();

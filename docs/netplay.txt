@@ -1,0 +1,67 @@
+client:
+	./lsms rom.sms lbots/net.so host.name 1253
+server:
+	./lsms rom.sms lbots/server-net.so 1253
+
+protocol:
+
+everything is little-endian
+
+TCP tunnel version:
+len.u16 dgram.u8[len] (len XOR 0xFFFF).u16
+pretty self-explanatory really
+
+C 0x00
+	keepalive / unstick blocking connection
+S 0x00
+	keepalive / unstick blocking connection
+
+C 0x01 sizeof(struct SMS).u32 crc32(sms_rom).u32 flags.u32
+	attempt connect
+
+	flags:
+	- bit 0: sms_rom_is_banked
+	- bit 1: USE_NTSC
+S 0x01 frame_index.u32 player_id.s32
+	acknowledge connection
+	player_id should be >= -1 (-1 == spectator)
+
+C 0x02 reason.asciiz
+	attempt disconnect
+S 0x02 reason.asciiz
+	disconnect
+
+C 0x03 frame_index.u32 offset.u32 len.u16
+	attempt state sync
+	len should be <= 1024
+
+S 0x04 frame_index.u32 offset.u32 len.u16 data.u8[len]
+	sync state
+	len should be <= 1024
+
+C 0x06 frame_index.u32 frame_count.u8 input.u8[frame_count][2]
+	report inputs covering [frame_index, frame_index+frame_count)
+	frame_count should be >= 1
+S 0x06 frame_index.u32 frame_count.u8 input.u8[frame_count][2]
+	report inputs covering [frame_index, frame_index+frame_count)
+	frame_count should be >= 1
+
+	client should check bits which are applied to own input
+	if these change, client should send correct inputs for these bits
+
+	bitmasks:
+		player 1: 3F 00
+		player 2: C0 0F
+
+	note, reset bit may need to be given to player 1
+
+C 0x07 frame_index.u32
+	report frame head
+S 0x07 frame_index.u32
+	report frame head
+
+C 0x08 frame_index.u32 crc.u32 z80crc.u32 psgcrc.u32 vdpcrc.u32 ramcrc.u32 vramcrc.u32 input.u8[2]
+	report state checksum at given frame
+S 0x08 frame_index.u32 crc.u32 z80crc.u32 psgcrc.u32 vdpcrc.u32 ramcrc.u32 vramcrc.u32 input.u8[2]
+	report state checksum at given frame
+
