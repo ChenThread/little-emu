@@ -22,11 +22,6 @@
 #define BACKLOG_CAP 4096
 #define PLAYER_MAX 2
 
-struct gapper {
-	uint32_t idx;
-	uint32_t gap_beg, gap_end;
-};
-
 static const uint64_t keepalive_period = 1000000;
 static const uint64_t keepalive_death  = 4000000;
 
@@ -36,20 +31,18 @@ static int sockfd;
 static uint64_t cli_keepalive_recv[CLIENT_MAX];
 static uint64_t cli_keepalive_send;
 static uint32_t cli_player[CLIENT_MAX];
+static uint32_t cli_frame_idx[CLIENT_MAX];
 static struct sockaddr *cli_addr[CLIENT_MAX];
 static socklen_t cli_addrlen[CLIENT_MAX];
 static int32_t player_cli[PLAYER_MAX] = {-1, -1};
 static uint32_t player_initial_frame_idx[PLAYER_MAX];
 static uint32_t player_frame_idx[PLAYER_MAX];
-static struct gapper player_gapper[PLAYER_MAX];
 #else
 static struct sockaddr *serv_addr;
 static socklen_t serv_addrlen;
 static uint64_t serv_keepalive_recv;
 static uint64_t serv_keepalive_send;
 static uint32_t serv_frame_idx;
-uint32_t serv_frame_arrived[BACKLOG_CAP];
-static struct gapper serv_gapper;
 static uint32_t initial_backlog = 0;
 #endif
 
@@ -83,73 +76,6 @@ static uint32_t crc32_sms_net(uint8_t *data, size_t len, uint32_t crc)
 	}
 
 	return ~crc;
-}
-
-static uint32_t gapper_add(struct gapper *G, uint32_t beg, uint32_t end)
-{
-	/*
-	if gap_beg == gap_end, there is no gap
-	otherwise: gap_beg(0) < gap_end(1) < idx(0)
-	*/
-
-	// if beg <= end, we cannot touch the gap
-	int32_t wnd_len = (end - beg);
-	if(wnd_len <= 0) {
-		return (G->gap_beg == G->gap_end
-			? G->idx
-			: G->gap_beg);
-	}
-
-	int32_t wnd_beg = (beg - G->idx);
-	if(wnd_beg > 0) {
-		// there is a gap
-
-		if(G->gap_beg == G->gap_end) {
-			// create gap
-			G->gap_beg = G->idx;
-			G->gap_end = beg;
-
-		} else {
-			// expand gap if necessary
-			int32_t xgapend = (beg - G->gap_end);
-			if(xgapend > 0) {
-				G->gap_end = beg;
-			}
-		}
-	}
-
-	// attempt to shrink gap
-	if(G->gap_beg != G->gap_end) {
-		int32_t wnd_gap_beg = (beg - G->gap_beg);
-		int32_t wnd_gap_end = (end - G->gap_end);
-
-		// Reduce beginning of gap
-		if(wnd_gap_beg <= 0) {
-			int32_t rebeg = (end - G->gap_beg);
-			if(rebeg > 0) {
-				G->gap_beg = end;
-			}
-		}
-
-		// Reduce end of gap
-		if(wnd_gap_end >= 0) {
-			int32_t reend = (beg - G->gap_end);
-			if(reend < 0) {
-				G->gap_end = beg;
-			}
-		}
-
-		// Check gap order
-		int32_t gap_len = G->gap_end - G->gap_beg;
-		if(gap_len <= 0) {
-			// Seal gap
-			G->gap_beg = G->gap_end = G->idx;
-		}
-	}
-
-	return (G->gap_beg == G->gap_end
-		? G->idx
-		: G->gap_beg);
 }
 
 #ifdef SERVER
@@ -405,10 +331,8 @@ void bot_update()
 					player_cli[pidx] = cidx;
 					player_frame_idx[pidx] = backlog_end;
 					player_initial_frame_idx[pidx] = backlog_end;
-					player_gapper[pidx].idx = backlog_end;
-					player_gapper[pidx].gap_beg = backlog_end;
-					player_gapper[pidx].gap_end = backlog_end;
 				}
+				cli_frame_idx[cidx] = backlog_end;
 				cli_addrlen[cidx] = maddr_len;
 				cli_addr[cidx] = malloc(maddr_len);
 				memcpy(cli_addr[cidx], maddr, maddr_len);
@@ -468,43 +392,6 @@ void bot_update()
 				sendto(sockfd, mbuf, 11+len, 0,
 					(struct sockaddr *)&maddr, maddr_len);
 
-			} else if(mbuf[0] == '\x05') {
-				// Did they not get a set of inputs? Resend it!
-				uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
-
-				// Of course, we have to have the inputs available...
-				if((backlog_end-in_beg) >= BACKLOG_CAP-1) {
-					kick_client("\x02""End of backlog reached", cidx, maddr, maddr_len);
-					continue;
-				}
-
-				// Get length and clamp max at now / clamp max at max
-				uint32_t in_len = mbuf[5];
-				uint32_t in_end = in_beg+in_len;
-				if((int32_t)(backlog_end-in_end) < 0) {
-					in_len = backlog_end-in_beg;
-				}
-
-				// Skip if length == 0
-				if(in_len == 0) {
-					continue;
-				}
-
-				// Now produce backlog!
-				mbuf[0] = 0x06;
-				((uint32_t *)(mbuf+1))[0] = in_beg;
-				assert(in_len >= 1 && in_len <= 255);
-				mbuf[5] = in_len;
-				uint8_t *p = &mbuf[6];
-				for(uint32_t i = 0; i < in_len; i++) {
-					p[i*2+0] = input_log[BLWRAP((in_beg+i))][0];
-					p[i*2+1] = input_log[BLWRAP((in_beg+i))][1];
-				}
-
-				// Send it!
-				sendto(sockfd, mbuf, 6+2*in_len, 0,
-					(struct sockaddr *)&maddr, maddr_len);
-
 			} else if(mbuf[0] == '\x06') {
 				int pidx = cli_player[cidx];
 				if(pidx < 0 || pidx >= PLAYER_MAX) {
@@ -529,30 +416,7 @@ void bot_update()
 					continue;
 				}
 
-				// Attempt to fill gap
-				uint32_t out_idx = gapper_add(&player_gapper[pidx], in_beg, in_end);
-				if(player_gapper[pidx].gap_beg != player_gapper[pidx].gap_end) {
-					uint32_t gapoffs = player_gapper[pidx].gap_beg;
-					uint32_t gaplen = player_gapper[pidx].gap_end-player_gapper[pidx].gap_beg;
-					printf("GAP %10d %3d\n", gapoffs, gaplen);
-					assert(gaplen >= 1 && gaplen <= 255);
-					uint8_t fillgappkt[6];
-					fillgappkt[0] = 0x05;
-					((uint32_t *)(fillgappkt+1))[0] = gapoffs;
-					fillgappkt[5] = gaplen;
-					sendto(sockfd, fillgappkt, sizeof(fillgappkt), 0,
-						cli_addr[cidx], cli_addrlen[cidx]);
-				}
-
-				// Advance if necessary
-				int32_t pfdelta = (int32_t)(out_idx-player_frame_idx[pidx]);
-				if(pfdelta > 0) {
-					player_frame_idx[pidx] = out_idx;
-					//printf("Advance %d\n", player_frame_idx[pidx]);
-				}
-
 				// Set inputs
-				mbuf[0] = 0x06;
 				uint8_t *p = mbuf+6;
 				for(int i = 0; i < in_len; i++) {
 					int idx = BLWRAP(in_beg+i);
@@ -564,24 +428,67 @@ void bot_update()
 					uint8_t new1 = p[2*i+1];
 					new0 = old0^((old0^new0)&m0);
 					new1 = old1^((old1^new1)&m1);
-					//p[2*i+0] = input_log[idx][0] = backlog[idx].joy[0] = new0;
-					//p[2*i+1] = input_log[idx][1] = backlog[idx].joy[1] = new1;
-					p[2*i+0] = input_log[idx][0] = new0;
-					p[2*i+1] = input_log[idx][1] = new1;
+					input_log[idx][0] = new0;
+					input_log[idx][1] = new1;
 					input_pmask[idx] |= (1<<pidx);
 				}
-				//printf("%3d INPUT\n", pidx);
 
-				if(pfdelta > 0) {
+				// Advance if we can
+				if((in_end-player_frame_idx[pidx]) > 0) {
+					player_frame_idx[pidx] = in_end;
+
 					// Send it to the other clients!
 					for(int ci = 0; ci < CLIENT_MAX; ci++) {
 						if(cli_addrlen[ci] != 0 && ci != cidx) {
-							sendto(sockfd, mbuf, 6+2*in_len, 0,
+							uint32_t loc_offs = cli_frame_idx[ci];
+							int32_t loc_len = (in_end-loc_offs);
+
+							if(loc_len < 1 || loc_len > 255) {
+								kick_client("\x02""Too much lag",
+									ci,
+									cli_addr[ci],
+									cli_addrlen[ci]);
+
+								continue;
+							}
+
+							mbuf[0] = 0x06;
+							((uint32_t *)(mbuf+1))[0] = loc_offs;
+							mbuf[5] = loc_len;
+							uint8_t *p = &mbuf[6];
+							for(int i = 0; i < loc_len; i++) {
+								int idx = BLWRAP(loc_offs+i);
+								p[2*i+0] = input_log[idx][0];
+								p[2*i+1] = input_log[idx][1];
+							}
+							sendto(sockfd, mbuf, 6+2*loc_len, 0,
 								cli_addr[ci], cli_addrlen[ci]);
 						}
 					}
 				}
 
+				// Update source frame head
+				if((int32_t)(in_end - cli_frame_idx[cidx]) > 0) {
+					cli_frame_idx[cidx] = in_end;
+				}
+
+				//printf("CSourc %3d frame head: %10d\n", cidx, cli_frame_idx[cidx]);
+
+				// Report head pointer
+				uint8_t headpkt[5];
+				headpkt[0] = 0x07;
+				*((uint32_t *)(headpkt+1)) = player_frame_idx[pidx];
+				sendto(sockfd, headpkt, sizeof(headpkt), 0,
+					cli_addr[cidx], cli_addrlen[cidx]);
+
+			} else if(mbuf[0] == '\x07') {
+				// Frame head
+				uint32_t in_offs = *((uint32_t *)(mbuf+1));
+				if((int32_t)(in_offs - cli_frame_idx[cidx]) > 0) {
+					cli_frame_idx[cidx] = in_offs;
+				}
+
+				//printf("Client %3d frame head: %10d\n", cidx, cli_frame_idx[cidx]);
 			}
 		}
 
@@ -659,94 +566,75 @@ void bot_update()
 			// but that's all really
 			//printf("STATE\n");
 
-		} else if(mbuf[0] == '\x05') {
-			// Server missed our inputs - resend them!
-			uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
-
-			// Of course, we have to have the inputs available...
-			assert(!((backlog_end-in_beg) >= BACKLOG_CAP-1));
-
-			// Get length and clamp max at now / clamp max at max
-			uint32_t in_len = mbuf[5];
-			if((int32_t)(backlog_end-(in_beg+in_len)) < 0) {
-				in_len = backlog_end-in_beg;
-			}
-
-			// Skip if length == 0
-			if(in_len == 0) {
-				continue;
-			}
-
-			// Now produce backlog!
-			mbuf[0] = 0x06;
-			((uint32_t *)(mbuf+1))[0] = in_beg;
-			assert(in_len >= 1 && in_len <= 255);
-			mbuf[5] = in_len;
-			uint8_t *p = &mbuf[6];
-			for(uint32_t i = 0; i < in_len; i++) {
-				p[i*2+0] = input_log[BLWRAP((in_beg+i))][0];
-				p[i*2+1] = input_log[BLWRAP((in_beg+i))][1];
-			}
-
-			// Send it!
-			sendto(sockfd, mbuf, 6+2*in_len, 0,
-				(struct sockaddr *)&maddr, maddr_len);
-
 		} else if(mbuf[0] == '\x06') {
 			// New inputs!
-			uint32_t in_beg = ((uint32_t *)(mbuf+1))[0];
+			uint32_t in_beg = *((uint32_t *)(mbuf+1));
 			uint32_t in_len = mbuf[5];
 			uint32_t in_end = in_beg+in_len;
 			uint8_t *p = &mbuf[6];
 			printf("INPUT %10d %3d %10d %10d\n"
 				, in_beg, in_len, in_end, backlog_end);
 
-			// Attempt to fill gap
-			uint32_t out_idx = gapper_add(&serv_gapper, in_beg, in_end);
-			if(serv_gapper.gap_beg != serv_gapper.gap_end) {
-				uint32_t gapoffs = serv_gapper.gap_beg;
-				uint32_t gaplen = serv_gapper.gap_end-serv_gapper.gap_beg;
-				printf("GAP %10d %3d\n", gapoffs, gaplen);
-				assert(gaplen >= 1 && gaplen <= 255);
-				uint8_t fillgappkt[6];
-				fillgappkt[0] = 0x05;
-				((uint32_t *)(fillgappkt+1))[0] = gapoffs;
-				fillgappkt[5] = gaplen;
-				sendto(sockfd, fillgappkt, sizeof(fillgappkt), 0,
-					serv_addr, serv_addrlen);
+			// Ignore if it would create a gap
+			if((int32_t)(in_beg-serv_frame_idx) > 0) {
+				printf("IGNORED\n");
+				continue;
 			}
 
-			// Check for differences
+			// Apply + check for diffs
 			uint32_t resim_beg = backlog_end;
 			//uint8_t m0 = (player_id >= 0 ? player_masks[player_id][0] : 0x00);
 			//uint8_t m1 = (player_id >= 0 ? player_masks[player_id][1] : 0x00);
 			for(int i = 0; i < in_len; i++) {
 				int idx = BLWRAP(in_beg+i);
+				uint8_t i0 = input_log[idx][0];
+				uint8_t i1 = input_log[idx][1];
 				/*
-				input_log[idx][0] &= m0;
-				input_log[idx][1] &= m1;
-				input_log[idx][0] |= p[i*2+0] & ~m0;
-				input_log[idx][1] |= p[i*2+1] & ~m1;
+				i0 &= m0;
+				i1 &= m1;
+				i0 |= p[i*2+0] & ~m0;
+				i1 |= p[i*2+1] & ~m1;
 				*/
-				if(input_log[idx][0] != p[i*2+0]
-					|| input_log[idx][1] != p[i*2+1]) {
-
+				i0 = p[i*2+0];
+				i1 = p[i*2+1];
+				if(i0 != p[i*2+0] || i1 != p[i*2+1]) {
 					if(in_beg+i < resim_beg) {
 						resim_beg = in_beg+i;
 					}
 				}
-				input_log[idx][0] = p[i*2+0];
-				input_log[idx][1] = p[i*2+1];
+				input_log[idx][0] = i0;
+				input_log[idx][1] = i1;
 				backlog[idx].joy[0] = input_log[idx][0];
 				backlog[idx].joy[1] = input_log[idx][1];
 			}
+			//printf("IN %02X %10d\n"
+				//, input_log[BLWRAP(in_end-1)][0]
+				//, (int32_t)(backlog_end-resim_beg)
+			//);
 
 			//assert(!((backlog_end-in_beg) >= BACKLOG_CAP-1));
 
 			// Check if server ahead
-			if((int32_t)(serv_frame_idx-out_idx) > 0) {
-				serv_frame_idx = out_idx;
+			if((int32_t)(in_end-serv_frame_idx) > 0) {
+				//printf("Bump %d -> %d\n", serv_frame_idx, in_end);
+				serv_frame_idx = in_end;
 			}
+
+			// Report head pointer
+			uint8_t headpkt[5];
+			headpkt[0] = 0x07;
+			*((uint32_t *)(headpkt+1)) = serv_frame_idx;
+			sendto(sockfd, headpkt, sizeof(headpkt), 0,
+				serv_addr, serv_addrlen);
+
+		} else if(mbuf[0] == '\x07') {
+			// Frame head
+			uint32_t in_offs = *((uint32_t *)(mbuf+1));
+			if((int32_t)(in_offs - serv_frame_idx) > 0) {
+				serv_frame_idx = in_offs;
+			}
+
+			//printf("Server frame head: %10d\n", serv_frame_idx);
 		}
 	}
 #endif
@@ -761,13 +649,20 @@ void bot_update()
 	if(player_id >= 0) {
 		// Send frame input to server
 		// TODO: batch these!
-		uint8_t myinputpkt[8];
+		uint8_t myinputpkt[6+256*2];
+		uint32_t loc_offs = serv_frame_idx;
+		int32_t loc_len = (backlog_end+1-loc_offs);
+		assert(loc_len >= 1 && loc_len <= 255);
 		myinputpkt[0] = 0x06;
-		((uint32_t *)(myinputpkt+1))[0] = backlog_end;
-		myinputpkt[5] = 0x01;
-		myinputpkt[6] = input_log[idx][0];
-		myinputpkt[7] = input_log[idx][1];
-		sendto(sockfd, myinputpkt, sizeof(myinputpkt), 0,
+		((uint32_t *)(myinputpkt+1))[0] = loc_offs;
+		myinputpkt[5] = loc_len;
+		uint8_t *p = &myinputpkt[6];
+		for(int i = 0; i < loc_len; i++) {
+			uint32_t idx = BLWRAP(loc_offs+i);
+			p[i*2+0] = input_log[idx][0];
+			p[i*2+1] = input_log[idx][1];
+		}
+		sendto(sockfd, myinputpkt, 6+loc_len*2, 0,
 			serv_addr, serv_addrlen);
 	}
 #endif
@@ -955,9 +850,7 @@ void bot_init(int argc, char *argv[])
 				initial_backlog = ((uint32_t *)(mbuf+1))[0];
 				player_id = ((int32_t *)(mbuf+1))[1];
 				backlog_end = initial_backlog;
-				serv_gapper.idx = backlog_end;
-				serv_gapper.gap_beg = backlog_end;
-				serv_gapper.gap_end = backlog_end;
+				serv_frame_idx = backlog_end;
 				player_control = ((player_id >= 0 && player_id <= 31)
 					? (1<<player_id) : 0);
 				printf("Acknowledged! id=%02d control=%08X\n"
