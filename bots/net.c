@@ -194,9 +194,6 @@ uint8_t bot_hook_input(struct SMS *sms, uint64_t timestamp, int port)
 
 void bot_update()
 {
-	// Save backlog frame (for sync purposes)
-	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
-
 	// Save frame input
 #ifdef SERVER
 	input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
@@ -209,6 +206,52 @@ void bot_update()
 	}
 	input_pmask[BLWRAP(backlog_end)] = 0;
 #endif
+
+	// Save backlog frame (for sync purposes)
+	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
+
+	// Send CRC32
+	{
+		uint8_t i0 = backlog[BLWRAP(backlog_end)].joy[0];
+		uint8_t i1 = backlog[BLWRAP(backlog_end)].joy[1];
+		backlog[BLWRAP(backlog_end)].joy[0] = 0xFF;
+		backlog[BLWRAP(backlog_end)].joy[1] = 0xFF;
+		uint8_t crcpkt[29];
+		crcpkt[0] = 0x08;
+		*(uint32_t *)(crcpkt+1) = backlog_end;
+		*(uint32_t *)(crcpkt+5) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)],
+			sizeof(struct SMS), 0);
+		*(uint32_t *)(crcpkt+9) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)].z80,
+			sizeof(struct Z80), 0);
+		*(uint32_t *)(crcpkt+13) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)].psg,
+			sizeof(struct PSG), 0);
+		*(uint32_t *)(crcpkt+17) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)].vdp,
+			sizeof(struct VDP), 0);
+		*(uint32_t *)(crcpkt+21) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)].ram,
+			8192, 0);
+		*(uint32_t *)(crcpkt+25) = crc32_sms_net(
+			(uint8_t *)&backlog[BLWRAP(backlog_end)].vram,
+			16384, 0);
+		backlog[BLWRAP(backlog_end)].joy[0] = i0;
+		backlog[BLWRAP(backlog_end)].joy[1] = i1;
+
+#ifdef SERVER
+		for(int ci = 0; ci < CLIENT_MAX; ci++) {
+			if(cli_addrlen[ci] != 0) {
+				sendto(sockfd, crcpkt, sizeof(crcpkt), 0,
+					cli_addr[ci], cli_addrlen[ci]);
+			}
+		}
+#else
+		sendto(sockfd, crcpkt, sizeof(crcpkt), 0,
+			serv_addr, serv_addrlen);
+#endif
+	}
 
 #ifdef SERVER
 	// Do a quick check
@@ -485,6 +528,61 @@ void bot_update()
 				}
 
 				//printf("Client %3d frame head: %10d\n", cidx, cli_frame_idx[cidx]);
+			} else if(mbuf[0] == '\x08') {
+				// State CRC32
+				uint32_t frame_idx = *(uint32_t *)(mbuf+1);
+				if((int32_t)(frame_idx-backlog_end) >= -1) {
+					continue;
+				}
+				uint8_t crcpkt[29];
+				crcpkt[0] = 0x08;
+				uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
+				uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
+				backlog[BLWRAP(frame_idx)].joy[0] = 0xFF;
+				backlog[BLWRAP(frame_idx)].joy[1] = 0xFF;
+				*(uint32_t *)(crcpkt+1) = frame_idx;
+				*(uint32_t *)(crcpkt+5) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)],
+					sizeof(struct SMS), 0);
+				*(uint32_t *)(crcpkt+9) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].z80,
+					sizeof(struct Z80), 0);
+				*(uint32_t *)(crcpkt+13) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].psg,
+					sizeof(struct PSG), 0);
+				*(uint32_t *)(crcpkt+17) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp,
+					sizeof(struct VDP), 0);
+				*(uint32_t *)(crcpkt+21) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
+					8192, 0);
+				*(uint32_t *)(crcpkt+25) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+					16384, 0);
+				backlog[BLWRAP(frame_idx)].joy[0] = i0;
+				backlog[BLWRAP(frame_idx)].joy[1] = i1;
+
+				if(memcmp(crcpkt, mbuf, sizeof(crcpkt))) {
+					// Mismatched - kick!
+					printf("cur frame = %10d\n", backlog_end);
+					printf("exp frame = %10d\n", *(uint32_t *)(crcpkt+1));
+					printf("got frame = %10d\n", *(uint32_t *)(mbuf+1));
+					printf("exp CRC = %08X\n", *(uint32_t *)(crcpkt+5));
+					printf("got CRC = %08X\n", *(uint32_t *)(mbuf+5));
+					printf("exp Z80 CRC = %08X\n", *(uint32_t *)(crcpkt+9));
+					printf("got Z80 CRC = %08X\n", *(uint32_t *)(mbuf+9));
+					printf("exp PSG CRC = %08X\n", *(uint32_t *)(crcpkt+13));
+					printf("got PSG CRC = %08X\n", *(uint32_t *)(mbuf+13));
+					printf("exp VDP CRC = %08X\n", *(uint32_t *)(crcpkt+17));
+					printf("got VDP CRC = %08X\n", *(uint32_t *)(mbuf+17));
+					printf("exp RAM CRC = %08X\n", *(uint32_t *)(crcpkt+21));
+					printf("got RAM CRC = %08X\n", *(uint32_t *)(mbuf+21));
+					printf("exp VRAM CRC = %08X\n", *(uint32_t *)(crcpkt+25));
+					printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
+					fflush(stdout);
+					kick_client("\x02""CRC mismatch", cidx,
+						cli_addr[cidx], cli_addrlen[cidx]);
+				}
 			}
 		}
 
@@ -632,6 +730,61 @@ void bot_update()
 			}
 
 			//printf("Server frame head: %10d\n", serv_frame_idx);
+		} else if(mbuf[0] == '\x08') {
+			// State CRC32
+			uint32_t frame_idx = *(uint32_t *)(mbuf+1);
+			if((int32_t)(frame_idx-backlog_end) >= -1) {
+				continue;
+			}
+			uint8_t crcpkt[29];
+			crcpkt[0] = 0x08;
+			uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
+			uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
+			backlog[BLWRAP(frame_idx)].joy[0] = 0xFF;
+			backlog[BLWRAP(frame_idx)].joy[1] = 0xFF;
+			*(uint32_t *)(crcpkt+1) = frame_idx;
+			*(uint32_t *)(crcpkt+5) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)],
+				sizeof(struct SMS), 0);
+			*(uint32_t *)(crcpkt+9) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].z80,
+				sizeof(struct Z80), 0);
+			*(uint32_t *)(crcpkt+13) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].psg,
+				sizeof(struct PSG), 0);
+			*(uint32_t *)(crcpkt+17) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp,
+				sizeof(struct VDP), 0);
+			*(uint32_t *)(crcpkt+21) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
+				8192, 0);
+			*(uint32_t *)(crcpkt+25) = crc32_sms_net(
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+				16384, 0);
+			backlog[BLWRAP(frame_idx)].joy[0] = i0;
+			backlog[BLWRAP(frame_idx)].joy[1] = i1;
+
+			if(memcmp(crcpkt, mbuf, sizeof(crcpkt))) {
+				// Mismatched - bail!
+				printf("cur frame = %10d\n", backlog_end);
+				printf("exp frame = %10d\n", *(uint32_t *)(crcpkt+1));
+				printf("got frame = %10d\n", *(uint32_t *)(mbuf+1));
+				printf("exp CRC = %08X\n", *(uint32_t *)(crcpkt+5));
+				printf("got CRC = %08X\n", *(uint32_t *)(mbuf+5));
+				printf("exp Z80 CRC = %08X\n", *(uint32_t *)(crcpkt+9));
+				printf("got Z80 CRC = %08X\n", *(uint32_t *)(mbuf+9));
+				printf("exp PSG CRC = %08X\n", *(uint32_t *)(crcpkt+13));
+				printf("got PSG CRC = %08X\n", *(uint32_t *)(mbuf+13));
+				printf("exp VDP CRC = %08X\n", *(uint32_t *)(crcpkt+17));
+				printf("got VDP CRC = %08X\n", *(uint32_t *)(mbuf+17));
+				printf("exp RAM CRC = %08X\n", *(uint32_t *)(crcpkt+21));
+				printf("got RAM CRC = %08X\n", *(uint32_t *)(mbuf+21));
+				printf("exp VRAM CRC = %08X\n", *(uint32_t *)(crcpkt+25));
+				printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
+				fflush(stdout);
+				assert(!"CRC mismatch!");
+				abort();
+			}
 		}
 	}
 #endif

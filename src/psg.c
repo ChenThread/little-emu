@@ -104,17 +104,54 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		return;
 	}
 
-#ifndef DEDI
 	uint64_t timediff = timestamp - psg->timestamp;
-#endif
 
 	// TODO: proper no_draw version
+#ifndef DEDI
 	if(sms->no_draw) {
+#endif
+		for(int ch = 0; ch < 4; ch++) {
+			if(psg->period[ch] <= 1) {
+				continue;
+			}
+			for(uint64_t i = 0; i < timediff; i++) {
+				if(psg->poffs[ch] == 0) {
+					psg->poffs[ch] = psg->period[ch];
+					psg->poffs[ch] *= 16*3;
+					if(ch == 3) {
+						psg->poffs[ch] <<= 1;
+						psg->lfsr_offs += 1;
+						if((psg->lnoise&4)==0) {
+							// Periodic
+							psg->lfsr_offs %= 15+1;
+							if(psg->lfsr_offs == 15) {
+								psg->onstate[ch] = 1;
+							} else {
+								psg->onstate[ch] = 0;
+							}
+
+						} else {
+							// White noise
+							psg->lfsr_offs %= lfsr_noise_len;
+							psg->onstate[ch] = lfsr_noise_sequence[
+								psg->lfsr_offs]&1;
+						}
+						psg->onstate[ch] *= 0xFFFF;
+					} else {
+						psg->onstate[ch] ^= 0xFFFF;
+					}
+				}
+				if(psg->poffs[ch] != 0) {
+					psg->poffs[ch] -= 1;
+				}
+			}
+		}
+
 		psg->timestamp = timestamp;
 		return;
+#ifndef DEDI
 	}
 
-#ifndef DEDI
 	for(uint64_t i = 0; i < timediff; i++) {
 		int32_t outval = 0;
 		for(int ch = 0; ch < 4; ch++) {
@@ -160,8 +197,8 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		// but it doesn't really matter right now,
 		// as long as we have one that works.
 		outval <<= 8;
-		psg->outhpf_charge += (outval - psg->outhpf_charge)>>14;
-		outval -= psg->outhpf_charge;
+		outhpf_charge += (outval - outhpf_charge)>>14;
+		outval -= outhpf_charge;
 		outval += (1<<(9-1));
 		outval >>= 9;
 
@@ -179,9 +216,9 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 	}
 	SDL_AtomicAdd(&sound_data_len, timediff);
 	//assert(SDL_AtomicGet(&sound_data_len) < PSG_OUT_BUF_LEN);
-#endif
 
 	psg->timestamp = timestamp;
+#endif
 }
 
 void psg_init(struct PSG *psg)

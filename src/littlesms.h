@@ -82,6 +82,9 @@ struct VDP
 	uint64_t timestamp_end;
 } __attribute__((__packed__));
 
+// Electrical state
+int32_t outhpf_charge;
+
 struct PSG
 {
 	// PSG state
@@ -92,9 +95,6 @@ struct PSG
 	uint16_t lfsr_offs;
 	uint8_t lcmd;
 	uint8_t lnoise;
-
-	// Electrical state
-	int32_t outhpf_charge;
 	
 	// Tracking state
 	uint64_t timestamp;
