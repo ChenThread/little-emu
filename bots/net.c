@@ -196,16 +196,12 @@ uint8_t bot_hook_input(struct SMS *sms, uint64_t timestamp, int port)
 void bot_update()
 {
 	// Save frame input
-#ifdef SERVER
-	input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
-	input_log[BLWRAP(backlog_end)][1] = sms_current.joy[1];
-	input_pmask[BLWRAP(backlog_end)] |= player_control;
-#else
+#ifndef SERVER
 	if(player_id >= 0) {
 		input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
 		input_log[BLWRAP(backlog_end)][1] = sms_current.joy[1];
 	}
-	input_pmask[BLWRAP(backlog_end)] = 0;
+	input_pmask[BLWRAP(backlog_end)] |= player_control;
 #endif
 
 	// Save backlog frame (for sync purposes)
@@ -213,8 +209,8 @@ void bot_update()
 
 	// Send CRC32
 	// And no we do NOT want to do a wrap check here
-	if((uint32_t)(backlog_end-initial_backlog) >= 2) {
-		uint32_t frame_idx = backlog_end-2;
+	if((uint32_t)(backlog_end-initial_backlog) >= 3) {
+		uint32_t frame_idx = backlog_end-3;
 		uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
 		uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
 		backlog[BLWRAP(frame_idx)].joy[0] = 0xFF;
@@ -282,7 +278,9 @@ void bot_update()
 		// TODO: change this so we keep parity with the player falling behind
 		// This way we can avoid resyncing on the server
 		int32_t wldiff0 = (int32_t)(backlog_end-player_frame_idx[0]);
-		int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
+		//wldiff0 += 2;
+		//int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
+		int32_t wldiff1 = wldiff0;
 		//printf("wldiffs %d %d\n", wldiff0, wldiff1);
 		if((wldiff0 < 0 || wldiff1 < 0) && (player_cli[0] >= 0 || player_cli[1] >= 0)) {
 			//printf("jump-out activated\n");
@@ -464,16 +462,20 @@ void bot_update()
 				uint8_t *p = mbuf+6;
 				for(int i = 0; i < in_len; i++) {
 					int idx = BLWRAP(in_beg+i);
+					uint8_t new0 = p[2*i+0];
+					uint8_t new1 = p[2*i+1];
+					/*
 					uint8_t old0 = input_log[idx][0];
 					uint8_t old1 = input_log[idx][1];
 					uint8_t m0 = player_masks[pidx][0];
 					uint8_t m1 = player_masks[pidx][1];
-					uint8_t new0 = p[2*i+0];
-					uint8_t new1 = p[2*i+1];
 					new0 = old0^((old0^new0)&m0);
 					new1 = old1^((old1^new1)&m1);
+					*/
 					input_log[idx][0] = new0;
 					input_log[idx][1] = new1;
+					backlog[idx].joy[0] = new0;
+					backlog[idx].joy[1] = new1;
 					input_pmask[idx] |= (1<<pidx);
 				}
 
@@ -829,6 +831,18 @@ void bot_update()
 	// Load frame backup
 	backlog[idx].joy[0] = input_log[idx][0];
 	backlog[idx].joy[1] = input_log[idx][1];
+#if 0
+	printf("DECIDE %10d %10d %02X %02X\n"
+#ifdef SERVER
+		, -9999999
+#else
+		, player_id
+#endif
+		, backlog_end
+		, input_log[idx][0]
+		, input_log[idx][1]
+		);
+#endif
 	sms_copy(&sms_current, &backlog[idx]);
 	backlog_end++;
 
