@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <errno.h>
 
+#define NET_DEBUG_SYNC 0
+
 #ifndef SERVER
 #include <SDL.h>
 #endif
@@ -207,6 +209,7 @@ void bot_update()
 	// Save backlog frame (for sync purposes)
 	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
 
+#if NET_DEBUG_SYNC
 	// Send CRC32
 	// And no we do NOT want to do a wrap check here
 	if((uint32_t)(backlog_end-initial_backlog) >= 3) {
@@ -253,6 +256,7 @@ void bot_update()
 			serv_addr, serv_addrlen);
 #endif
 	}
+#endif
 
 #ifdef SERVER
 	// Do a quick check
