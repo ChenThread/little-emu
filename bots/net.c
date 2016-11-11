@@ -46,6 +46,7 @@ static socklen_t serv_addrlen;
 static uint64_t serv_keepalive_recv;
 static uint64_t serv_keepalive_send;
 static uint32_t serv_frame_idx;
+static uint32_t serv_full_frame_idx;
 uint32_t initial_backlog = 0;
 #endif
 
@@ -319,12 +320,12 @@ void bot_update()
 		bool jump_out = false;
 
 		// Ensure both players are ahead of us
-		int32_t wldiff0 = (int32_t)(backlog_end-player_frame_idx[0]);
-		int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
+		int32_t wldiff0 = (int32_t)(player_frame_idx[0]-backlog_end);
+		int32_t wldiff1 = (int32_t)(player_frame_idx[1]-backlog_end);
 		//printf("wldiffs %d %d\n", wldiff0, wldiff1);
 		if((player_cli[0] >= 0 || player_cli[1] >= 0)) {
-			if((player_cli[0] < 0) || wldiff0 < 0) {
-			if((player_cli[1] < 0) || wldiff1 < 0) {
+			if(player_cli[0] < 0 || wldiff0 > 0) {
+			if(player_cli[1] < 0 || wldiff1 > 0) {
 				//printf("jump-out activated\n");
 				jump_out = true;
 			}
@@ -494,6 +495,7 @@ void bot_update()
 				// Ensure we are in range
 				int32_t fdelta0 = (int32_t)(in_beg-backlog_end);
 				int32_t fdelta1 = fdelta0+in_len;
+				//printf("Deltas %3d %10d %10d\n", cidx, fdelta0, fdelta1);
 				if(fdelta0 >= BACKLOG_CAP/4 || -fdelta0 >= BACKLOG_CAP-1) {
 					kick_client("\x02""Frame out of range", cidx, maddr, maddr_len);
 					continue;
@@ -507,19 +509,36 @@ void bot_update()
 				uint8_t *p = mbuf+6;
 				uint8_t m0 = player_masks[pidx][0];
 				uint8_t m1 = player_masks[pidx][1];
+				bool history_failure = false;
 				for(int i = 0; i < in_len; i++) {
 					int idx = BLWRAP(in_beg+i);
 					uint8_t new0 = p[2*i+0];
 					uint8_t new1 = p[2*i+1];
 					uint8_t old0 = input_log[idx][0];
 					uint8_t old1 = input_log[idx][1];
-					new0 = old0^((old0^new0)&m0);
-					new1 = old1^((old1^new1)&m1);
+					old0 &= ~m0;
+					old1 &= ~m1;
+					new0 &= m0;
+					new1 &= m1;
+					new0 |= old0;
+					new1 |= old1;
+					if((int32_t)(in_beg+i-backlog_end) < 0) {
+						if(input_log[idx][0] != new0 || input_log[idx][1] != new1) {
+							history_failure = true;
+							break;
+						}
+						continue;
+					}
 					input_log[idx][0] = new0;
 					input_log[idx][1] = new1;
 					backlog[idx].joy[0] = new0;
 					backlog[idx].joy[1] = new1;
 					input_pmask[idx] |= (1<<pidx);
+				}
+
+				if(history_failure) {
+					kick_client("\x02""Time paradox", cidx, maddr, maddr_len);
+					continue;
 				}
 
 				// Advance if we can
@@ -606,6 +625,13 @@ void bot_update()
 					printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
 					printf("exp input = %02X %02X\n", crcpkt[29], crcpkt[30]);
 					printf("got input = %02X %02X\n", mbuf[29], mbuf[30]);
+					uint8_t ip0 = backlog[BLWRAP(frame_idx-1)].joy[0];
+					uint8_t ip1 = backlog[BLWRAP(frame_idx-1)].joy[1];
+					uint8_t in0 = backlog[BLWRAP(frame_idx+1)].joy[0];
+					uint8_t in1 = backlog[BLWRAP(frame_idx+1)].joy[1];
+					printf(" -1 input = %02X %02X\n", ip0, ip1);
+					printf(" +1 input = %02X %02X\n", in0, in1);
+
 					fflush(stdout);
 					kick_client("\x02""CRC mismatch", cidx,
 						cli_addr[cidx], cli_addrlen[cidx]);
@@ -698,7 +724,7 @@ void bot_update()
 				, in_beg, in_len, in_end, backlog_end);
 
 			// Ignore if it would create a gap
-			if((int32_t)(in_beg-serv_frame_idx) > 0) {
+			if((int32_t)(in_beg-serv_full_frame_idx) > 0) {
 				printf("IGNORED\n");
 				continue;
 			}
@@ -712,6 +738,8 @@ void bot_update()
 				int idx = BLWRAP(in_beg+i);
 				uint8_t i0 = p[i*2+0];
 				uint8_t i1 = p[i*2+1];
+				assert((i0&m0) == (input_log[idx][0]&m0));
+				assert((i1&m1) == (input_log[idx][1]&m1));
 				if(i0 != input_log[idx][0] || i1 != input_log[idx][1]) {
 					if(in_beg+i < resim_beg) {
 						printf("RESIM %10d %10d %10d %02X%02X %02X%02X\n", in_beg+i, resim_beg, backlog_end, i0, i1, input_log[idx][0], input_log[idx][1]);
@@ -752,6 +780,7 @@ void bot_update()
 			if(resim_len > 0) {
 				printf("!!!!!! PERFORM RESIM %3d %10d %3d\n", player_id, resim_beg, resim_len);
 				for(int i = 0; i < resim_len; i++) {
+					assert((int32_t)(resim_beg+i+1-backlog_end) <= 0);
 					int idxp = BLWRAP(resim_beg+i);
 					int idxn = BLWRAP(resim_beg+i+1);
 					backlog[idxp].joy[0] = input_log[idxp][0];
@@ -809,15 +838,15 @@ void bot_update()
 			//assert(!((backlog_end-in_beg) >= BACKLOG_CAP-1));
 
 			// Check if server ahead
-			if((int32_t)(in_end-serv_frame_idx) > 0) {
+			if((int32_t)(in_end-serv_full_frame_idx) > 0) {
 				//printf("Bump %d -> %d\n", serv_frame_idx, in_end);
-				serv_frame_idx = in_end;
+				serv_full_frame_idx = in_end;
 			}
 
 			// Report head pointer
 			uint8_t headpkt[5];
 			headpkt[0] = 0x07;
-			*((uint32_t *)(headpkt+1)) = serv_frame_idx;
+			*((uint32_t *)(headpkt+1)) = serv_full_frame_idx;
 			sendto(sockfd, headpkt, sizeof(headpkt), 0,
 				serv_addr, serv_addrlen);
 
@@ -884,6 +913,12 @@ void bot_update()
 				printf("got VRAM CRC = %08X\n", *(uint32_t *)(mbuf+25));
 				printf("exp input = %02X %02X\n", crcpkt[29], crcpkt[30]);
 				printf("got input = %02X %02X\n", mbuf[29], mbuf[30]);
+				uint8_t ip0 = backlog[BLWRAP(frame_idx-1)].joy[0];
+				uint8_t ip1 = backlog[BLWRAP(frame_idx-1)].joy[1];
+				uint8_t in0 = backlog[BLWRAP(frame_idx+1)].joy[0];
+				uint8_t in1 = backlog[BLWRAP(frame_idx+1)].joy[1];
+				printf(" -1 input = %02X %02X\n", ip0, ip1);
+				printf(" +1 input = %02X %02X\n", in0, in1);
 				fflush(stdout);
 				assert(!"CRC mismatch!");
 				abort();
@@ -1112,6 +1147,7 @@ void bot_init(int argc, char *argv[])
 				player_id = ((int32_t *)(mbuf+1))[1];
 				backlog_end = initial_backlog;
 				serv_frame_idx = backlog_end;
+				serv_full_frame_idx = backlog_end;
 				player_control = ((player_id >= 0 && player_id <= 31)
 					? (1<<player_id) : 0);
 				printf("Acknowledged! id=%02d control=%08X\n"
