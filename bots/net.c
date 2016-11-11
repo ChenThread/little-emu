@@ -673,7 +673,7 @@ void bot_update()
 		if(rlen < 0) {
 			if(player_id < 0) {
 				// Wait for messages
-				if((int32_t)(backlog_end-serv_frame_idx) >= -1) {
+				if((int32_t)(backlog_end-serv_full_frame_idx) >= -1) {
 					usleep(1000);
 					continue;
 				}
