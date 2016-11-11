@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #define NET_DEBUG_SYNC 0
+#define NET_DEBUG_SYNC_RESIM 1
 
 #ifndef SERVER
 #include <SDL.h>
@@ -38,14 +39,14 @@ static struct sockaddr *cli_addr[CLIENT_MAX];
 static socklen_t cli_addrlen[CLIENT_MAX];
 static int32_t player_cli[PLAYER_MAX] = {-1, -1};
 static uint32_t player_frame_idx[PLAYER_MAX];
-static const uint32_t initial_backlog = 0;
+const uint32_t initial_backlog = 0;
 #else
 static struct sockaddr *serv_addr;
 static socklen_t serv_addrlen;
 static uint64_t serv_keepalive_recv;
 static uint64_t serv_keepalive_send;
 static uint32_t serv_frame_idx;
-static uint32_t initial_backlog = 0;
+uint32_t initial_backlog = 0;
 #endif
 
 // a minute should be long enough
@@ -209,6 +210,45 @@ void bot_update()
 	// Save backlog frame (for sync purposes)
 	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
 
+	// Send input to other clients
+#ifdef SERVER
+	for(int ci = 0; ci < CLIENT_MAX; ci++) {
+		uint8_t mbuf[6+2*256];
+		uint32_t in_end = backlog_end;
+		if(cli_addrlen[ci] != 0) {
+			uint32_t loc_offs = cli_frame_idx[ci];
+			int32_t loc_len = (in_end-loc_offs);
+
+			if(loc_len < 1) {
+				continue;
+			}
+
+			//printf("INSEND %3d %10d %3d\n", ci, loc_offs, loc_len);
+
+			if(loc_len < 1 || loc_len > 255) {
+				kick_client("\x02""Too much lag",
+					ci,
+					cli_addr[ci],
+					cli_addrlen[ci]);
+
+				continue;
+			}
+
+			mbuf[0] = 0x06;
+			((uint32_t *)(mbuf+1))[0] = loc_offs;
+			mbuf[5] = loc_len;
+			uint8_t *p = &mbuf[6];
+			for(int i = 0; i < loc_len; i++) {
+				int idx = BLWRAP(loc_offs+i);
+				p[2*i+0] = input_log[idx][0];
+				p[2*i+1] = input_log[idx][1];
+			}
+			sendto(sockfd, mbuf, 6+2*loc_len, 0,
+				cli_addr[ci], cli_addrlen[ci]);
+		}
+	}
+#endif
+
 #if NET_DEBUG_SYNC
 	// Send CRC32
 	// And no we do NOT want to do a wrap check here
@@ -260,6 +300,7 @@ void bot_update()
 
 #ifdef SERVER
 	// Do a quick check
+	/*
 	if(player_cli[0] >= 0 || player_cli[1] >= 0) {
 		if(player_cli[0] < 0) {
 			player_frame_idx[0] = backlog_end;
@@ -268,6 +309,7 @@ void bot_update()
 			player_frame_idx[1] = backlog_end;
 		}
 	}
+	*/
 
 	// Get messages
 	printf("=== SFrame %d\n", backlog_end);
@@ -276,19 +318,17 @@ void bot_update()
 		uint64_t now = time_now();
 		bool jump_out = false;
 
-		// Ensure that we are ahead of both players
-		// Unless we have no players, in which case wait until we have players
-		//
-		// TODO: change this so we keep parity with the player falling behind
-		// This way we can avoid resyncing on the server
+		// Ensure both players are ahead of us
 		int32_t wldiff0 = (int32_t)(backlog_end-player_frame_idx[0]);
-		//wldiff0 += 2;
-		//int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
-		int32_t wldiff1 = wldiff0;
+		int32_t wldiff1 = (int32_t)(backlog_end-player_frame_idx[1]);
 		//printf("wldiffs %d %d\n", wldiff0, wldiff1);
-		if((wldiff0 < 0 || wldiff1 < 0) && (player_cli[0] >= 0 || player_cli[1] >= 0)) {
-			//printf("jump-out activated\n");
-			jump_out = true;
+		if((player_cli[0] >= 0 || player_cli[1] >= 0)) {
+			if((player_cli[0] < 0) || wldiff0 < 0) {
+			if((player_cli[1] < 0) || wldiff1 < 0) {
+				//printf("jump-out activated\n");
+				jump_out = true;
+			}
+			}
 		}
 
 		// Send keepalives if necessary
@@ -374,13 +414,14 @@ void bot_update()
 					pidx = 0;
 				} else if(player_cli[1] < 0) {
 					// TODO: get nonspecs to sync
-					//pidx = 1;
+					pidx = 1;
 				}
 
 				cli_player[cidx] = pidx;
 				printf("client %5d -> player %5d\n", cidx, pidx);
 				if(pidx != -1) {
 					player_cli[pidx] = cidx;
+					player_frame_idx[pidx] = backlog_end;
 				}
 				cli_frame_idx[cidx] = backlog_end;
 				cli_addrlen[cidx] = maddr_len;
@@ -464,18 +505,16 @@ void bot_update()
 
 				// Set inputs
 				uint8_t *p = mbuf+6;
+				uint8_t m0 = player_masks[pidx][0];
+				uint8_t m1 = player_masks[pidx][1];
 				for(int i = 0; i < in_len; i++) {
 					int idx = BLWRAP(in_beg+i);
 					uint8_t new0 = p[2*i+0];
 					uint8_t new1 = p[2*i+1];
-					/*
 					uint8_t old0 = input_log[idx][0];
 					uint8_t old1 = input_log[idx][1];
-					uint8_t m0 = player_masks[pidx][0];
-					uint8_t m1 = player_masks[pidx][1];
 					new0 = old0^((old0^new0)&m0);
 					new1 = old1^((old1^new1)&m1);
-					*/
 					input_log[idx][0] = new0;
 					input_log[idx][1] = new1;
 					backlog[idx].joy[0] = new0;
@@ -486,41 +525,14 @@ void bot_update()
 				// Advance if we can
 				if((in_end-player_frame_idx[pidx]) > 0) {
 					player_frame_idx[pidx] = in_end;
-
-					// Send it to the other clients!
-					for(int ci = 0; ci < CLIENT_MAX; ci++) {
-						if(cli_addrlen[ci] != 0 && ci != cidx) {
-							uint32_t loc_offs = cli_frame_idx[ci];
-							int32_t loc_len = (in_end-loc_offs);
-
-							if(loc_len < 1 || loc_len > 255) {
-								kick_client("\x02""Too much lag",
-									ci,
-									cli_addr[ci],
-									cli_addrlen[ci]);
-
-								continue;
-							}
-
-							mbuf[0] = 0x06;
-							((uint32_t *)(mbuf+1))[0] = loc_offs;
-							mbuf[5] = loc_len;
-							uint8_t *p = &mbuf[6];
-							for(int i = 0; i < loc_len; i++) {
-								int idx = BLWRAP(loc_offs+i);
-								p[2*i+0] = input_log[idx][0];
-								p[2*i+1] = input_log[idx][1];
-							}
-							sendto(sockfd, mbuf, 6+2*loc_len, 0,
-								cli_addr[ci], cli_addrlen[ci]);
-						}
-					}
 				}
 
 				// Update source frame head
+				/*
 				if((int32_t)(in_end - cli_frame_idx[cidx]) > 0) {
 					cli_frame_idx[cidx] = in_end;
 				}
+				*/
 
 				//printf("CSourc %3d frame head: %10d\n", cidx, cli_frame_idx[cidx]);
 
@@ -641,7 +653,7 @@ void bot_update()
 				}
 			}
 
-			// Check if we need to keep going
+			// TODO: put a condition here to compensate for clock drift
 			if(false) {
 				usleep(1000);
 				continue;
@@ -693,22 +705,16 @@ void bot_update()
 
 			// Apply + check for diffs
 			uint32_t resim_beg = backlog_end;
-			//uint8_t m0 = (player_id >= 0 ? player_masks[player_id][0] : 0x00);
-			//uint8_t m1 = (player_id >= 0 ? player_masks[player_id][1] : 0x00);
+			uint8_t m0 = (player_id >= 0 ? player_masks[player_id][0] : 0x00);
+			uint8_t m1 = (player_id >= 0 ? player_masks[player_id][1] : 0x00);
+
 			for(int i = 0; i < in_len; i++) {
 				int idx = BLWRAP(in_beg+i);
-				uint8_t i0 = input_log[idx][0];
-				uint8_t i1 = input_log[idx][1];
-				/*
-				i0 &= m0;
-				i1 &= m1;
-				i0 |= p[i*2+0] & ~m0;
-				i1 |= p[i*2+1] & ~m1;
-				*/
-				i0 = p[i*2+0];
-				i1 = p[i*2+1];
-				if(i0 != p[i*2+0] || i1 != p[i*2+1]) {
+				uint8_t i0 = p[i*2+0];
+				uint8_t i1 = p[i*2+1];
+				if(i0 != input_log[idx][0] || i1 != input_log[idx][1]) {
 					if(in_beg+i < resim_beg) {
+						printf("RESIM %10d %10d %10d %02X%02X %02X%02X\n", in_beg+i, resim_beg, backlog_end, i0, i1, input_log[idx][0], input_log[idx][1]);
 						resim_beg = in_beg+i;
 					}
 				}
@@ -716,6 +722,84 @@ void bot_update()
 				input_log[idx][1] = i1;
 				backlog[idx].joy[0] = input_log[idx][0];
 				backlog[idx].joy[1] = input_log[idx][1];
+			}
+
+			// Advance input further
+			int carry_idx = BLWRAP(in_beg+in_len-1);
+			int32_t in_extlen = (int32_t)(backlog_end+1-in_beg);
+			for(int i = in_len; i < in_extlen; i++) {
+				int idx = BLWRAP(in_beg+i);
+				uint8_t i0 = input_log[idx][0];
+				uint8_t i1 = input_log[idx][1];
+				i0 &= m0;
+				i1 &= m1;
+				i0 |= input_log[carry_idx][0] & ~m0;
+				i1 |= input_log[carry_idx][1] & ~m1;
+				if(i0 != input_log[idx][0] || i1 != input_log[idx][1]) {
+					if(in_beg+i < resim_beg) {
+						printf("RESIM %10d %10d %10d\n", in_beg+i, resim_beg, backlog_end);
+						resim_beg = in_beg+i;
+					}
+				}
+				input_log[idx][0] = i0;
+				input_log[idx][1] = i1;
+				backlog[idx].joy[0] = input_log[idx][0];
+				backlog[idx].joy[1] = input_log[idx][1];
+			}
+
+			// Perform resim if we need to
+			int32_t resim_len = (backlog_end-resim_beg);
+			if(resim_len > 0) {
+				printf("!!!!!! PERFORM RESIM %3d %10d %3d\n", player_id, resim_beg, resim_len);
+				for(int i = 0; i < resim_len; i++) {
+					int idxp = BLWRAP(resim_beg+i);
+					int idxn = BLWRAP(resim_beg+i+1);
+					backlog[idxp].joy[0] = input_log[idxp][0];
+					backlog[idxp].joy[1] = input_log[idxp][1];
+					sms_copy(&backlog[idxn], &backlog[idxp]);
+					backlog[idxn].no_draw = true;
+					sms_run_frame(&backlog[idxn]);
+					backlog[idxn].no_draw = false;
+					backlog[idxn].joy[0] = input_log[idxn][0];
+					backlog[idxn].joy[1] = input_log[idxn][1];
+				}
+
+#if NET_DEBUG_SYNC_RESIM
+				uint32_t frame_idx = backlog_end-100;
+				//uint32_t frame_idx = resim_beg+1;
+				uint8_t i0 = backlog[BLWRAP(frame_idx)].joy[0];
+				uint8_t i1 = backlog[BLWRAP(frame_idx)].joy[1];
+				backlog[BLWRAP(frame_idx)].joy[0] = 0xFF;
+				backlog[BLWRAP(frame_idx)].joy[1] = 0xFF;
+				uint8_t crcpkt[31];
+				crcpkt[0] = 0x08;
+				*(uint32_t *)(crcpkt+1) = frame_idx;
+				*(uint32_t *)(crcpkt+5) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)],
+					sizeof(struct SMS), 0);
+				*(uint32_t *)(crcpkt+9) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].z80,
+					sizeof(struct Z80), 0);
+				*(uint32_t *)(crcpkt+13) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].psg,
+					sizeof(struct PSG), 0);
+				*(uint32_t *)(crcpkt+17) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp,
+					sizeof(struct VDP), 0);
+				*(uint32_t *)(crcpkt+21) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
+					8192, 0);
+				*(uint32_t *)(crcpkt+25) = crc32_sms_net(
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+					16384, 0);
+				crcpkt[29] = i0;
+				crcpkt[30] = i1;
+				backlog[BLWRAP(frame_idx)].joy[0] = i0;
+				backlog[BLWRAP(frame_idx)].joy[1] = i1;
+
+				sendto(sockfd, crcpkt, sizeof(crcpkt), 0,
+					serv_addr, serv_addrlen);
+#endif
 			}
 			//printf("IN %02X %10d\n"
 				//, input_log[BLWRAP(in_end-1)][0]
