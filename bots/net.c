@@ -745,9 +745,8 @@ void bot_update()
 				);
 
 			// Adjust timer based on delay
-			if(adjx >= 2) {
-				twait += (adjx*FRAME_WAIT)/64;
-			}
+			adjx++;
+			twait += (adjx*FRAME_WAIT)/128;
 
 			// Apply + check for diffs
 			uint32_t resim_beg = backlog_end;
