@@ -2,7 +2,7 @@
 #ifndef DEDI
 int16_t sound_data[PSG_OUT_BUF_LEN];
 static size_t sound_data_out_offs;
-static size_t sound_data_offs;
+static size_t sound_data_offs = 0;
 static SDL_atomic_t sound_data_len;
 #endif
 
@@ -22,6 +22,9 @@ static void psg_global_init(void)
 	if(is_initialised) {
 		return;
 	}
+#ifndef DEDI
+	SDL_AtomicSet(&sound_data_len, 0);
+#endif
 	is_initialised = true;
 
 	uint16_t l = 0x8000;
@@ -45,21 +48,31 @@ static void psg_global_init(void)
 void psg_pop_16bit_mono(int16_t *buf, size_t len)
 {
 	// TODO: proper interpolation
+	if(!is_initialised) {
+		memset(buf, 0, len*2);
+		return;
+	}
 
 #ifndef DEDI
 	// Get number of samples to read/write
-	size_t src_len = SDL_AtomicGet(&sound_data_len);
+	ssize_t src_len = SDL_AtomicGet(&sound_data_len);
+	SDL_AtomicAdd(&sound_data_len, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
+	src_len &= (PSG_OUT_BUF_LEN-1);
 #if USE_NTSC
-	size_t ideal_samples_to_read = (228*3*262*60*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000;
 #else
-	size_t ideal_samples_to_read = (228*3*313*50*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*313*50*len)/48000;
 #endif
-	size_t samples_to_read = ideal_samples_to_read;
-	size_t samples_to_write = len;
+	ssize_t samples_to_read = ideal_samples_to_read;
+	ssize_t samples_to_write = len;
 	if(src_len > ideal_samples_to_read*2) {
 		samples_to_read = src_len-ideal_samples_to_read*2+ideal_samples_to_read;
 		//samples_to_read = ideal_samples_to_read;
 	}
+	if(samples_to_read > src_len) {
+		samples_to_read = src_len;
+	}
+	//printf("%d %d %d\n", (int)samples_to_read, (int)src_len, (int)ideal_samples_to_read);
 
 	// If there's not enough to read, just fill
 	if(samples_to_read < 8) {
@@ -214,7 +227,9 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		sound_data[sound_data_offs++] = outval;
 		sound_data_offs &= (PSG_OUT_BUF_LEN-1);
 	}
+	SDL_LockAudio();
 	SDL_AtomicAdd(&sound_data_len, timediff);
+	SDL_UnlockAudio();
 	//assert(SDL_AtomicGet(&sound_data_len) < PSG_OUT_BUF_LEN);
 
 	psg->timestamp = timestamp;
