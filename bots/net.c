@@ -720,13 +720,33 @@ void bot_update()
 			uint32_t in_len = mbuf[5];
 			uint32_t in_end = in_beg+in_len;
 			uint8_t *p = &mbuf[6];
+			/*
 			printf("INPUT %10d %3d %10d %10d\n"
 				, in_beg, in_len, in_end, backlog_end);
+			*/
 
 			// Ignore if it would create a gap
 			if((int32_t)(in_beg-serv_full_frame_idx) > 0) {
-				printf("IGNORED\n");
+				printf("GAP IGNORED\n");
 				continue;
+			}
+
+			int32_t adj0 = (int32_t)(in_len);
+			int32_t adj1 = (int32_t)(backlog_end-in_end);
+			int32_t adjx = adj1-adj0;
+			int32_t jitter = (int32_t)(in_end-serv_full_frame_idx);
+			printf("TS %3d %10d J=%3d A0=%3d A1=%3d D=%4d\n"
+				, player_id
+				, in_end
+				, jitter
+				, adj0
+				, adj1
+				, adj1-adj0
+				);
+
+			// Adjust timer based on delay
+			if(adjx >= 2) {
+				twait += (adjx*FRAME_WAIT)/64;
 			}
 
 			// Apply + check for diffs
@@ -742,7 +762,7 @@ void bot_update()
 				assert((i1&m1) == (input_log[idx][1]&m1));
 				if(i0 != input_log[idx][0] || i1 != input_log[idx][1]) {
 					if(in_beg+i < resim_beg) {
-						printf("RESIM %10d %10d %10d %02X%02X %02X%02X\n", in_beg+i, resim_beg, backlog_end, i0, i1, input_log[idx][0], input_log[idx][1]);
+						//printf("RESIM %10d %10d %10d %02X%02X %02X%02X\n", in_beg+i, resim_beg, backlog_end, i0, i1, input_log[idx][0], input_log[idx][1]);
 						resim_beg = in_beg+i;
 					}
 				}
@@ -765,7 +785,7 @@ void bot_update()
 				i1 |= input_log[carry_idx][1] & ~m1;
 				if(i0 != input_log[idx][0] || i1 != input_log[idx][1]) {
 					if(in_beg+i < resim_beg) {
-						printf("RESIM %10d %10d %10d\n", in_beg+i, resim_beg, backlog_end);
+						//printf("RESIM %10d %10d %10d\n", in_beg+i, resim_beg, backlog_end);
 						resim_beg = in_beg+i;
 					}
 				}
@@ -973,7 +993,7 @@ void bot_update()
 
 	// If spectator, play catchup if too far behind
 	if(player_id < 0) {
-		printf("***** SPEC %d\n", backlog_end);
+		//printf("***** SPEC %d\n", backlog_end);
 		if((int32_t)(serv_frame_idx-backlog_end) >= 20) {
 			twait = time_now()-FRAME_WAIT*15;
 		}
