@@ -995,8 +995,8 @@ void bot_update()
 	// If spectator, play catchup if too far behind
 	if(player_id < 0) {
 		//printf("***** SPEC %d\n", backlog_end);
-		if((int32_t)(serv_frame_idx-backlog_end) >= 20) {
-			twait = time_now()-FRAME_WAIT*15;
+		if((int32_t)(serv_frame_idx-backlog_end) >= 40) {
+			twait = time_now()-FRAME_WAIT*35;
 		}
 	}
 
