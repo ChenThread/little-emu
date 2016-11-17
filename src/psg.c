@@ -213,7 +213,8 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		outhpf_charge += (outval - outhpf_charge)>>14;
 		outval -= outhpf_charge;
 		outval += (1<<(9-1));
-		outval >>= 9;
+		//outval >>= 9;
+		outval >>= 11;
 
 		// Saturate
 		if(outval > 0x7FFF) { 
