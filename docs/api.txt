@@ -15,13 +15,16 @@ const char lemu_core_name[];
 const char *lemu_core_inputs_global[]; // end with NULL
 const char *lemu_core_inputs_player[]; // end with NULL
 
-struct EmuGlobals *lemu_core_global_new(const char *fname, const void *data, size_t len);
+struct EmuGlobal *lemu_core_global_new(const char *fname, const void *data, size_t len);
 void lemu_core_global_free(struct EmuGlobal *G);
 void lemu_core_state_init(struct EmuGlobal *G, void *state);
 
 void lemu_core_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
 
 // public lemu API for frontend authors / bot authors
+struct EmuGlobal *lemu_global_new(const char *fname, const void *data, size_t len);
+void lemu_global_free(struct EmuGlobal *G);
+void lemu_state_init(struct EmuGlobal *G, void *state);
 void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
 void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
 

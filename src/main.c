@@ -20,9 +20,9 @@
 #include "system/sms/all.h"
 
 void *botlib = NULL;
-void (*botlib_init)(struct SMSGlobal *G, int argc, char *argv[]) = NULL;
-void (*botlib_update)(struct SMSGlobal *G) = NULL;
-uint8_t (*botlib_hook_input)(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port) = NULL;
+void (*botlib_init)(struct EmuGlobal *G, int argc, char *argv[]) = NULL;
+void (*botlib_update)(struct EmuGlobal *G) = NULL;
+uint8_t (*botlib_hook_input)(struct EmuGlobal *G, void *sms, uint64_t timestamp, int port) = NULL;
 
 #ifndef DEDI
 SDL_Window *window = NULL;
@@ -30,17 +30,20 @@ SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
 #endif
 
-struct SMSGlobal Gsms;
+struct EmuGlobal *Gbase = NULL;
 
 void bot_update()
 {
 	if(botlib_update != NULL) {
-		botlib_update(&Gsms);
+		botlib_update(Gbase);
 	}
 }
 
-uint8_t input_fetch(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port)
+// FIXME make + use generic API
+uint8_t input_fetch(struct EmuGlobal *globals, void *state, uint64_t timestamp, int port)
 {
+	//struct SMSGlobal *G = (struct SMSGlobal *)globals;
+	struct SMS *sms = (struct SMS *)state;
 #ifndef DEDI
 	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
 
@@ -124,16 +127,17 @@ int main(int argc, char *argv[])
 		botlib_hook_input = input_fetch;
 	}
 
-	// Set up SMS
-	sms_init_global(&Gsms, argv[1], rom_buffer, rsiz);
-	sms_init(&Gsms, &Gsms.current);
+	// Set up global + state
+	Gbase = lemu_global_new(argv[1], rom_buffer, rsiz);
+	assert(Gbase != NULL);
+	lemu_state_init(Gbase, Gbase->current_state);
 
 #ifndef DEDI
 	// Set up SDL
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
 	char window_title_buf[256];
 	snprintf(window_title_buf, sizeof(window_title_buf)-1,
-		"little-emu - core: %s", Gsms.H.core_name);
+		"little-emu - core: %s", Gbase->core_name);
 	window_title_buf[255] = '\x00';
 	window = SDL_CreateWindow(window_title_buf,
 		SDL_WINDOWPOS_CENTERED,
@@ -162,37 +166,37 @@ int main(int argc, char *argv[])
 #endif
 
 	// Run
-	Gsms.current.ram[0] = 0xAB;
 	if(botlib_init != NULL) {
-		botlib_init(&Gsms, argc-2, argv+2);
+		botlib_init(Gbase, argc-2, argv+2);
 	}
 
 #ifndef DEDI
 	SDL_PauseAudio(0);
 #endif
-	Gsms.H.twait = time_now();
+	Gbase->twait = time_now();
 	for(;;) {
-		struct SMS *sms = &Gsms.current;
+		// FIXME make + use generic API
+		struct SMS *sms = (struct SMS *)Gbase->current_state;
 		struct SMS sms_ndsim;
-		sms->joy[0] = botlib_hook_input(&Gsms, sms, sms->timestamp, 0);
-		sms->joy[1] = botlib_hook_input(&Gsms, sms, sms->timestamp, 1);
+		sms->joy[0] = botlib_hook_input(Gbase, sms, sms->timestamp, 0);
+		sms->joy[1] = botlib_hook_input(Gbase, sms, sms->timestamp, 1);
 		bot_update();
-		lemu_copy(&Gsms.H, &sms_ndsim, sms);
-		lemu_run_frame(&Gsms.H, sms, false);
+		lemu_copy(Gbase, &sms_ndsim, sms);
+		lemu_run_frame(Gbase, sms, false);
 		/*
 		sms_ndsim.no_draw = true;
-		lemu_run_frame(&Gsms, &sms_ndsim, true);
+		lemu_run_frame(Gbase, &sms_ndsim, true);
 		sms_ndsim.no_draw = false;
 		assert(memcmp(&sms_ndsim, sms, sizeof(struct SMS)) == 0);
 		*/
 
 		uint64_t tnow = time_now();
-		Gsms.H.twait += FRAME_WAIT;
+		Gbase->twait += FRAME_WAIT;
 		if(sms->no_draw) {
-			Gsms.H.twait = tnow;
+			Gbase->twait = tnow;
 		} else {
-			if(TIME_IN_ORDER(tnow, Gsms.H.twait)) {
-				usleep((useconds_t)(Gsms.H.twait-tnow));
+			if(TIME_IN_ORDER(tnow, Gbase->twait)) {
+				usleep((useconds_t)(Gbase->twait-tnow));
 			}
 		}
 
@@ -206,7 +210,8 @@ int main(int argc, char *argv[])
 			for(int y = 0; y < SCANLINES; y++) {
 				uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
 				for(int x = 0; x < 342; x++) {
-					uint32_t v = Gsms.frame_data[y][x];
+					// FIXME make API then use it
+					uint32_t v = ((struct SMSGlobal *)Gbase)->frame_data[y][x];
 					uint32_t r = ((v>>0)&3)*0x55;
 					uint32_t g = ((v>>2)&3)*0x55;
 					uint32_t b = ((v>>4)&3)*0x55;

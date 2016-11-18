@@ -235,6 +235,8 @@ void sms_init(struct SMSGlobal *G, struct SMS *sms)
 	//sms->z80.timestamp = 1;
 	//sms->vdp.timestamp = 0;
 
+	sms->ram[0] = 0xAB;
+
 	sms->no_draw = false;
 }
 
@@ -510,7 +512,7 @@ static void sms_rom_load(struct SMSGlobal *G, const char *fname, const void *dat
 	}
 }
 
-void sms_init_global(struct SMSGlobal *G, const char *fname, const void *data, size_t len)
+static void sms_init_global(struct SMSGlobal *G, const char *fname, const void *data, size_t len)
 {
 	*G = (struct SMSGlobal){
 		.H = {
@@ -581,11 +583,21 @@ struct EmuGlobal *lemu_core_global_new(const char *fname, const void *data, size
 	return &(G->H);
 }
 
+void lemu_core_global_free(struct EmuGlobal *G)
+{
+	free(G);
+}
+
 void lemu_core_run_frame(struct EmuGlobal *G, void *sms, bool no_draw)
 {
 	bool old_no_draw = no_draw;
 	((struct SMS *)sms)->no_draw = no_draw;
 	sms_run_frame((struct SMSGlobal *)G, (struct SMS *)sms);
 	((struct SMS *)sms)->no_draw = old_no_draw;
+}
+
+void lemu_core_state_init(struct EmuGlobal *G, void *state)
+{
+	sms_init((struct SMSGlobal *)G, (struct SMS *)state);
 }
 

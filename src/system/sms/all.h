@@ -65,8 +65,6 @@ struct SMSGlobal
 };
 
 // sms.c
-extern struct SMSGlobal Gsms;
-void sms_init_global(struct SMSGlobal *G, const char *fname, const void *data, size_t len);
 void sms_init(struct SMSGlobal *G, struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);

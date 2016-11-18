@@ -45,7 +45,9 @@ struct EmuGlobal {
 
 // core.c
 uint64_t time_now(void);
-void lemu_get_core_name(struct EmuGlobal *G, void *state, bool no_draw);
+struct EmuGlobal *lemu_global_new(const char *fname, const void *data, size_t len);
+void lemu_global_free(struct EmuGlobal *G);
+void lemu_state_init(struct EmuGlobal *G, void *state);
 void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
 void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
 
