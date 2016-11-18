@@ -6,14 +6,6 @@
 
 #define TIME_IN_ORDER(t0, t1) (((t0) - (t1)) > ((t1) - (t0)))
 
-#if 0
-// OVERCLOCK
-#define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*1)
-#else
-// Normal
-#define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*3)
-#endif
-
 #define PSG_OUT_BUF_LEN (1<<24)
 
 #define VDP_ADD_CYCLES(vdp, v) (vdp)->timestamp += ((v)*2)
@@ -145,6 +137,7 @@ void sms_init(struct SMSGlobal *G, struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
 void sms_run_frame(struct SMSGlobal *G, struct SMS *sms);
+extern void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp);
 
 // vdp.c
 uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
@@ -156,12 +149,11 @@ void vdp_init(struct SMSGlobal *G, struct VDP *vdp);
 void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
 
 // z80.c
-void z80_reset(struct Z80 *z80);
-void z80_init(struct SMSGlobal *G, struct Z80 *z80);
-void z80_irq(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint8_t dat);
-void z80_nmi(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms);
-void z80_run(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
-extern void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp);
+void sms_z80_reset(struct Z80 *z80);
+void sms_z80_init(struct SMSGlobal *G, struct Z80 *z80);
+void sms_z80_irq(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint8_t dat);
+void sms_z80_nmi(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms);
+void sms_z80_run(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
 
 // main.c
 extern struct SMSGlobal Gsms;
