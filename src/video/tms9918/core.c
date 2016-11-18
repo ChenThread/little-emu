@@ -5,15 +5,18 @@ static const uint64_t LINT_OFFS = (47-17);
 static const uint64_t SLATCH_OFFS = (47-15);
 static const uint64_t VINT_OFFS = (47-18);
 
-void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+#define VDP_TIMESTAMP_CAP (((struct SMS *)state)->z80.H.timestamp_end)
+// FIXME need to decouple from SMS Z80 somehow
+
+void vdp_estimate_line_irq(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	if(!TIME_IN_ORDER(vdp->timestamp, sms->z80.timestamp_end)) {
+	if(!TIME_IN_ORDER(vdp->H.timestamp, VDP_TIMESTAMP_CAP)) {
 		return;
 	}
 
 	// Get beginning + end
-	uint64_t ts_beg = vdp->timestamp;
-	uint64_t ts_end = sms->z80.timestamp_end;
+	uint64_t ts_beg = vdp->H.timestamp;
+	uint64_t ts_end = VDP_TIMESTAMP_CAP;
 	//uint64_t beg_frame = ts_beg/((unsigned long long)(684*SCANLINES));
 	uint32_t beg_toffs = ts_beg%((unsigned long long)(684*SCANLINES));
 	//uint64_t end_frame = ts_end/((unsigned long long)(684*SCANLINES));
@@ -28,7 +31,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms
 			vint_line = 0xF1;
 		}
 	}
-	uint64_t ts_beg_frame = vdp->timestamp - beg_toffs;
+	uint64_t ts_beg_frame = vdp->H.timestamp - beg_toffs;
 	uint64_t ts_beg_int = ts_beg_frame + (FRAME_START_Y)*684 + 2*LINT_OFFS;
 	uint64_t ts_end_int = ts_beg_frame + (FRAME_START_Y+vint_line)*684 + 2*LINT_OFFS;
 
@@ -56,19 +59,19 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms
 	// Check if it will reload
 	if(TIME_IN_ORDER(ts_beg, ts_beg_int)) {
 		// Register reload happens
-		uint64_t ts = vdp->timestamp - beg_toffs;
+		uint64_t ts = vdp->H.timestamp - beg_toffs;
 		ts += 684*(FRAME_START_Y+vdp->regs[0x0A]);
 		ts += 2*LINT_OFFS+2;
 		if(TIME_IN_ORDER(ts_beg, ts)) {
-		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
-			sms->z80.timestamp_end = ts;
+		if(TIME_IN_ORDER(ts, VDP_TIMESTAMP_CAP)) {
+			VDP_TIMESTAMP_CAP = ts;
 		}
 		}
 
 	} else {
 		// Register reload does not happen
 		// Advance to nearest plausible point
-		uint64_t ts = vdp->timestamp - beg_toffs;
+		uint64_t ts = vdp->H.timestamp - beg_toffs;
 		ts += 684*FRAME_START_Y;
 		ts += 2*LINT_OFFS+2;
 		while(!TIME_IN_ORDER(ts_beg, ts)) {
@@ -79,14 +82,14 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms
 		ts += 684*(uint32_t)(vdp->line_counter);
 
 		if(TIME_IN_ORDER(ts_beg, ts)) {
-		if(TIME_IN_ORDER(ts, sms->z80.timestamp_end)) {
-			sms->z80.timestamp_end = ts;
+		if(TIME_IN_ORDER(ts, VDP_TIMESTAMP_CAP)) {
+			VDP_TIMESTAMP_CAP = ts;
 		}
 		}
 	}
 }
 
-static void vdp_do_reg_write(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+static void vdp_do_reg_write(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
@@ -105,12 +108,12 @@ static void vdp_do_reg_write(struct VDP *vdp, struct SMSGlobal *G, struct SMS *s
 	} else {
 		vdp->irq_mask |=  2;
 	}
-	vdp_estimate_line_irq(vdp, G, sms, timestamp);
+	vdp_estimate_line_irq(vdp, G, state, timestamp);
 }
 
-void vdp_init(struct SMSGlobal *G, struct VDP *vdp)
+void vdp_init(struct EmuGlobal *G, struct VDP *vdp)
 {
-	*vdp = (struct VDP){ .timestamp=0 };
+	*vdp = (struct VDP){ .H={.timestamp=0,}, };
 	vdp->ctrl_addr = 0xBF00;
 	vdp->ctrl_latch = 0;
 	vdp->read_buf = 0x00;
@@ -130,14 +133,18 @@ void vdp_init(struct SMSGlobal *G, struct VDP *vdp)
 	vdp->irq_out = 0;
 }
 
-void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+void vdp_run(struct VDP *vdp, struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp)
 {
 	timestamp &= ~1;
-	if(!TIME_IN_ORDER(vdp->timestamp, timestamp)) {
+	if(!TIME_IN_ORDER(vdp->H.timestamp, timestamp)) {
 		return;
 	}
 
-	uint64_t timediff = timestamp - vdp->timestamp;
+	// FIXME: decouple
+	struct SMSGlobal *G = (struct SMSGlobal *)H;
+	uint8_t (*frame_data)[342] = G->frame_data;
+
+	uint64_t timediff = timestamp - vdp->H.timestamp;
 
 	// FIXME: get correct timing for non-192 modes
 	int vint_line = 0xC1;
@@ -150,26 +157,26 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 	}
 
 	// Fetch vcounters/hcounters
-	uint32_t vctr_beg = ((vdp->timestamp/(684ULL))%((unsigned long long)SCANLINES));
-	uint32_t hctr_beg = (vdp->timestamp%(684ULL));
+	uint32_t vctr_beg = ((vdp->H.timestamp/(684ULL))%((unsigned long long)SCANLINES));
+	uint32_t hctr_beg = (vdp->H.timestamp%(684ULL));
 	uint32_t vctr_end = ((timestamp/(684ULL))%((unsigned long long)SCANLINES));
 	uint32_t hctr_end = (timestamp%(684ULL));
-	vdp->timestamp_end = timestamp;
+	vdp->H.timestamp_end = timestamp;
 	assert((hctr_beg&1) == 0);
 	assert((hctr_end&1) == 0);
 	hctr_beg >>= 1;
 	hctr_end >>= 1;
 
 	// Fetch pointers
-	uint8_t *sp_tab_y = &sms->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x00];
-	uint8_t *sp_tab_p = &sms->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x80];
-	uint8_t *sp_tiles = &sms->vram[((vdp->regs[0x06]<<11)&0x2000)];
-	uint8_t *bg_names = &sms->vram[((vdp->regs[0x02]<<10)&0x3800)];
-	uint8_t *bg_tiles = &sms->vram[0];
+	uint8_t *sp_tab_y = &vdp->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x00];
+	uint8_t *sp_tab_p = &vdp->vram[((vdp->regs[0x05]<<7)&0x3F00)+0x80];
+	uint8_t *sp_tiles = &vdp->vram[((vdp->regs[0x06]<<11)&0x2000)];
+	uint8_t *bg_names = &vdp->vram[((vdp->regs[0x02]<<10)&0x3800)];
+	uint8_t *bg_tiles = &vdp->vram[0];
 
 	int scywrap = 28*8;
 	if(vint_line != 0xC1) {
-		bg_names = &sms->vram[((vdp->regs[0x02]<<10)&0x3000)+0x0700];
+		bg_names = &vdp->vram[((vdp->regs[0x02]<<10)&0x3000)+0x0700];
 		scywrap = 32*8;
 	}
 
@@ -183,7 +190,7 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 	sdethigh <<= sshift;
 	sdetwide <<= sshift;
 	int lborder = ((vdp->regs[0x00]&0x20) != 0 ? 8 : 0);
-	int bcol = sms->cram[(vdp->regs[0x07]&0x0F)|0x10];
+	int bcol = vdp->cram[(vdp->regs[0x07]&0x0F)|0x10];
 	int scx = (-vdp->scx)&0xFF;
 	int scy = (vdp->scy)&0xFF;
 
@@ -216,15 +223,15 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 		}
 
 		// Set vblank IRQ
-		if(y == vint_line && (sms->vdp.regs[0x01]&0x20) != 0) {
+		if(y == vint_line && (vdp->regs[0x01]&0x20) != 0) {
 			if(hbeg < VINT_OFFS && VINT_OFFS <= hend) {
-				sms->vdp.irq_out |= 1;
+				vdp->irq_out |= 1;
 			}
 		}
 
 		// Latch status flags
 		if(hbeg <= SLATCH_OFFS && SLATCH_OFFS < hend) {
-			if(y == vint_line && (sms->vdp.regs[0x01]&0x20) != 0) {
+			if(y == vint_line && (vdp->regs[0x01]&0x20) != 0) {
 				vdp->status_latches |= 0x80;
 			}
 			vdp->status |= vdp->status_latches;
@@ -248,20 +255,19 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 					//printf("SLI Reload %02X\n", vdp->line_counter);
 					{
 						// Kill it here
-						//z80_irq(&sms->z80, sms, 0xFF);
 						vdp->irq_out |= 2;
 						//vdp->status |= 0x80;
 						hend = (47-17);
 						timediff -= (hend-hbeg)*2;
 						//printf("%016lX\n", timediff);
-						vdp->timestamp_end -= timediff;
-						if(TIME_IN_ORDER(sms->z80.timestamp_end,
-								vdp->timestamp_end)) {
-							sms->z80.timestamp_end = vdp->timestamp_end;
+						vdp->H.timestamp_end -= timediff;
+						if(TIME_IN_ORDER(VDP_TIMESTAMP_CAP,
+								vdp->H.timestamp_end)) {
+							VDP_TIMESTAMP_CAP = vdp->H.timestamp_end;
 						}
 						vctr_end = vctr;
-						uint32_t vctr_chk = ((vdp->timestamp_end/(684ULL))%((unsigned long long)SCANLINES));
-						uint32_t hctr_chk = (vdp->timestamp_end%(684ULL));
+						uint32_t vctr_chk = ((vdp->H.timestamp_end/(684ULL))%((unsigned long long)SCANLINES));
+						uint32_t hctr_chk = (vdp->H.timestamp_end%(684ULL));
 						//printf("hend %d %d\n", hend, hctr_chk>>1);
 						//printf("vend %d %d\n", vctr_end, vctr_chk);
 						fflush(stdout);
@@ -384,13 +390,13 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
-					G->frame_data[vctr][hctr] = 0x00;
+					frame_data[vctr][hctr] = 0x00;
 				}
 			} else {
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
-					G->frame_data[vctr][hctr] = (
+					frame_data[vctr][hctr] = (
 						hctr >= 47-13 && hctr < 47+256+15
 						? bcol
 						: 0x00);
@@ -495,11 +501,11 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 						v |= pal;
 					}
 					assert(hctr >= 0 && hctr < 342);
-					G->frame_data[vctr][hctr] = sms->cram[v&0x1F];
-					//G->frame_data[vctr][hctr] = v&0x1F;
+					frame_data[vctr][hctr] = vdp->cram[v&0x1F];
+					//frame_data[vctr][hctr] = v&0x1F;
 				} else {
 					assert(hctr >= 0 && hctr < 342);
-					G->frame_data[vctr][hctr] = (
+					frame_data[vctr][hctr] = (
 						hctr >= 47-13 && hctr < 47+256+15
 						? bcol
 						: 0x00);
@@ -518,12 +524,12 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 	//printf("%03d.%03d -> %03d.%03d\n" , vctr_beg, hctr_beg , vctr_end, hctr_end;
 
 	// Update timestamp
-	vdp->timestamp = vdp->timestamp_end;
+	vdp->H.timestamp = vdp->H.timestamp_end;
 }
 
-uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+uint8_t vdp_read_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	vdp_run(vdp, G, sms, timestamp);
+	vdp_run(vdp, G, state, timestamp);
 	vdp->ctrl_latch = 0;
 	vdp->irq_out &= ~3;
 	uint8_t ret = vdp->status;
@@ -531,21 +537,21 @@ uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uin
 	return ret;
 }
 
-uint8_t vdp_read_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+uint8_t vdp_read_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	vdp_run(vdp, G, sms, timestamp);
+	vdp_run(vdp, G, state, timestamp);
 	vdp->ctrl_latch = 0;
 	uint8_t ret = vdp->read_buf;
-	vdp->read_buf = sms->vram[vdp->ctrl_addr&0x3FFF];
+	vdp->read_buf = vdp->vram[vdp->ctrl_addr&0x3FFF];
 	//printf("VDP READ %04X %02X -> %02X\n", vdp->ctrl_addr, ret, vdp->read_buf);
 	vdp->ctrl_addr = ((vdp->ctrl_addr+1)&0x3FFF)
 		| (vdp->ctrl_addr&0xC000);
 	return ret;
 }
 
-void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void vdp_write_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, G, sms, timestamp);
+	vdp_run(vdp, G, state, timestamp);
 	if(vdp->ctrl_latch == 0) {
 		vdp->ctrl_addr &= ~0x00FF;
 		vdp->ctrl_addr |= ((uint16_t)val)<<0;
@@ -558,14 +564,14 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint6
 
 		switch(vdp->ctrl_addr>>14) {
 			case 0: // Read
-				vdp->read_buf = sms->vram[vdp->ctrl_addr&0x3FFF];
+				vdp->read_buf = vdp->vram[vdp->ctrl_addr&0x3FFF];
 				vdp->ctrl_addr = ((vdp->ctrl_addr+1)&0x3FFF)
 					| (vdp->ctrl_addr&0xC000);
 				break;
 			case 1: // Write
 				break;
 			case 2: // Register
-				vdp_do_reg_write(vdp, G, sms, timestamp);
+				vdp_do_reg_write(vdp, G, state, timestamp);
 				break;
 			case 3: // CRAM
 				break;
@@ -576,18 +582,18 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint6
 	//printf("VDP CTRL %02X\n", val);
 }
 
-void vdp_write_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void vdp_write_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, G, sms, timestamp);
+	vdp_run(vdp, G, state, timestamp);
 	//if(vdp->ctrl_latch != 0) { printf("VDP DLWR %04X %02X\n", vdp->ctrl_addr, val); }
 	vdp->ctrl_latch = 0;
 	if(vdp->ctrl_addr >= 0xC000) {
 		// CRAM
-		sms->cram[vdp->ctrl_addr&0x001F] = val;
+		vdp->cram[vdp->ctrl_addr&0x001F] = val;
 		//printf("CRAM %02X %02X\n", vdp->ctrl_addr&0x1F, val);
 	} else {
 		// VRAM
-		sms->vram[vdp->ctrl_addr&0x3FFF] = val;
+		vdp->vram[vdp->ctrl_addr&0x3FFF] = val;
 		//printf("VRAM %04X %02X\n", vdp->ctrl_addr&0x3FFF, val);
 	}
 	vdp->read_buf = val;

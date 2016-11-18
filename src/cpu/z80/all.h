@@ -9,7 +9,8 @@
 
 struct Z80
 {
-	// CPU state
+	struct EmuState H;
+
 	uint8_t gpr[8];
 	uint8_t shadow[8];
 	uint8_t idx[2][2];
@@ -18,9 +19,5 @@ struct Z80
 	uint16_t sp;
 	uint16_t pc;
 	uint8_t halted, im, noni;
-
-	// Tracking state
-	uint64_t timestamp;
-	uint64_t timestamp_end;
 } __attribute__((__packed__));
 

@@ -249,7 +249,7 @@ void bot_update(struct SMSGlobal *G)
 			(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
 			8192, 0);
 		*(uint32_t *)(crcpkt+25) = crc32_sms_net(
-			(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+			(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp.vram,
 			16384, 0);
 		crcpkt[29] = i0;
 		crcpkt[30] = i1;
@@ -570,7 +570,7 @@ void bot_update(struct SMSGlobal *G)
 					(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
 					8192, 0);
 				*(uint32_t *)(crcpkt+25) = crc32_sms_net(
-					(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp.vram,
 					16384, 0);
 				crcpkt[29] = i0;
 				crcpkt[30] = i1;
@@ -809,7 +809,7 @@ void bot_update(struct SMSGlobal *G)
 					(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
 					8192, 0);
 				*(uint32_t *)(crcpkt+25) = crc32_sms_net(
-					(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+					(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp.vram,
 					16384, 0);
 				crcpkt[29] = i0;
 				crcpkt[30] = i1;
@@ -877,7 +877,7 @@ void bot_update(struct SMSGlobal *G)
 				(uint8_t *)&backlog[BLWRAP(frame_idx)].ram,
 				8192, 0);
 			*(uint32_t *)(crcpkt+25) = crc32_sms_net(
-				(uint8_t *)&backlog[BLWRAP(frame_idx)].vram,
+				(uint8_t *)&backlog[BLWRAP(frame_idx)].vdp.vram,
 				16384, 0);
 			crcpkt[29] = i0;
 			crcpkt[30] = i1;

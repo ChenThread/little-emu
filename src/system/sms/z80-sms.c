@@ -17,10 +17,10 @@ uint8_t sms_z80_io_read(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp
 
 #if 0
 // OVERCLOCK
-#define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*1)
+#define Z80_ADD_CYCLES(z80, v) (z80)->H.timestamp += ((v)*1)
 #else
 // Normal
-#define Z80_ADD_CYCLES(z80, v) (z80)->timestamp += ((v)*3)
+#define Z80_ADD_CYCLES(z80, v) (z80)->H.timestamp += ((v)*3)
 #endif
 
 #include "cpu/z80/core.c"

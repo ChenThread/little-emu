@@ -45,6 +45,12 @@ struct EmuGlobal {
 	uint8_t extra_data[];
 };
 
+// structure MUST be packed
+struct EmuState {
+	uint64_t timestamp;
+	uint64_t timestamp_end;
+} __attribute__((__packed__));
+
 enum EmuSurfaceFormat {
 	EMU_SURFACE_FORMAT_BGRA_32
 };

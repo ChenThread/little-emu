@@ -27,7 +27,7 @@ static uint16_t Z80NAME(pair_pbe)(uint8_t *p)
 
 static uint8_t Z80NAME(fetch_op_m1)(struct Z80 *z80, Z80_STATE_PARAMS)
 {
-	uint8_t op = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->pc++);
+	uint8_t op = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->pc++);
 	Z80_ADD_CYCLES(z80, 4);
 	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
 	return op;
@@ -35,7 +35,7 @@ static uint8_t Z80NAME(fetch_op_m1)(struct Z80 *z80, Z80_STATE_PARAMS)
 
 static uint8_t Z80NAME(fetch_op_x)(struct Z80 *z80, Z80_STATE_PARAMS)
 {
-	uint8_t op = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->pc++);
+	uint8_t op = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->pc++);
 	Z80_ADD_CYCLES(z80, 3);
 	return op;
 }
@@ -213,9 +213,9 @@ static void Z80NAME(op_jp_cond)(struct Z80 *z80, Z80_STATE_PARAMS, bool cond)
 
 static void Z80NAME(op_ret)(struct Z80 *z80, Z80_STATE_PARAMS)
 {
-	uint8_t pcl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+	uint8_t pcl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 	Z80_ADD_CYCLES(z80, 3);
-	uint8_t pch = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+	uint8_t pch = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 	Z80_ADD_CYCLES(z80, 3);
 	//printf("RET %04X [%04X]\n", z80->pc, z80->sp);
 	z80->pc = Z80NAME(pair)(pch, pcl);
@@ -235,9 +235,9 @@ static void Z80NAME(op_call_cond)(struct Z80 *z80, Z80_STATE_PARAMS, bool cond)
 	uint16_t pcl = (uint16_t)Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 	uint16_t pch = (uint16_t)Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 	if(cond) {
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
 		Z80_ADD_CYCLES(z80, 4);
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 		Z80_ADD_CYCLES(z80, 3);
 		z80->pc = pcl+(pch<<8);
 	}
@@ -245,9 +245,9 @@ static void Z80NAME(op_call_cond)(struct Z80 *z80, Z80_STATE_PARAMS, bool cond)
 
 static void Z80NAME(op_rst)(struct Z80 *z80, Z80_STATE_PARAMS, uint16_t addr)
 {
-	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
 	Z80_ADD_CYCLES(z80, 4);
-	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = addr;
 }
@@ -260,8 +260,8 @@ void Z80NAME(irq)(struct Z80 *z80, Z80_STATE_PARAMS, uint8_t dat)
 
 	/*
 	printf("IRQ %d %d\n"
-		, (int32_t)(z80->timestamp%684)
-		, (int32_t)((z80->timestamp%(684*SCANLINES))/684)
+		, (int32_t)(z80->H.timestamp%684)
+		, (int32_t)((z80->H.timestamp%(684*SCANLINES))/684)
 		);
 	*/
 
@@ -275,15 +275,15 @@ void Z80NAME(irq)(struct Z80 *z80, Z80_STATE_PARAMS, uint8_t dat)
 		z80->iff2 = 0;
 		Z80_ADD_CYCLES(z80, 7);
 		z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
 		Z80_ADD_CYCLES(z80, 3);
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 		Z80_ADD_CYCLES(z80, 3);
 		uint16_t saddr = ((uint16_t)z80->i)<<8;
 		saddr += 0xFF;
-		z80->pc = 0xFF&Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, saddr++);
+		z80->pc = 0xFF&Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, saddr++);
 		Z80_ADD_CYCLES(z80, 3);
-		z80->pc |= ((uint16_t)(0xFF&Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, saddr++)))<<8;
+		z80->pc |= ((uint16_t)(0xFF&Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, saddr++)))<<8;
 		Z80_ADD_CYCLES(z80, 3);
 		z80->halted = false;
 
@@ -293,9 +293,9 @@ void Z80NAME(irq)(struct Z80 *z80, Z80_STATE_PARAMS, uint8_t dat)
 		z80->iff2 = 0;
 		Z80_ADD_CYCLES(z80, 7);
 		z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
 		Z80_ADD_CYCLES(z80, 3);
-		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+		Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 		Z80_ADD_CYCLES(z80, 3);
 		z80->pc = 0x0038;
 		z80->halted = false;
@@ -307,9 +307,9 @@ void Z80NAME(nmi)(struct Z80 *z80, Z80_STATE_PARAMS)
 	z80->iff1 = 0;
 	Z80_ADD_CYCLES(z80, 5);
 	z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F); // TODO: confirm
-	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
+	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>8));
 	Z80_ADD_CYCLES(z80, 3);
-	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
+	Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, (uint8_t)(z80->pc>>0));
 	Z80_ADD_CYCLES(z80, 3);
 	z80->pc = 0x0066;
 	z80->halted = false;
@@ -318,7 +318,7 @@ void Z80NAME(nmi)(struct Z80 *z80, Z80_STATE_PARAMS)
 void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 {
 	// Don't jump back into the past
-	if(!TIME_IN_ORDER(z80->timestamp, timestamp)) {
+	if(!TIME_IN_ORDER(z80->H.timestamp, timestamp)) {
 		return;
 	}
 
@@ -332,29 +332,29 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				, sms->vdp.irq_out
 				, sms->vdp.irq_mask
 				, sms->vdp.status
-				, (unsigned long long)z80->timestamp
+				, (unsigned long long)z80->H.timestamp
 				);
 			*/
 
 			Z80NAME(irq)(z80, Z80_STATE_ARGS, 0xFF);
 		} else {
-			while(TIME_IN_ORDER(z80->timestamp, timestamp)) {
+			while(TIME_IN_ORDER(z80->H.timestamp, timestamp)) {
 				Z80_ADD_CYCLES(z80, 4);
 				z80->r = (z80->r&0x80) + ((z80->r+1)&0x7F);
 			}
-			//z80->timestamp = timestamp;
+			//z80->H.timestamp = timestamp;
 			return;
 		}
 	}
 
 	// Run ops
-	uint64_t lstamp = z80->timestamp;
-	z80->timestamp_end = timestamp;
-	while(z80->timestamp < z80->timestamp_end) {
+	uint64_t lstamp = z80->H.timestamp;
+	z80->H.timestamp_end = timestamp;
+	while(z80->H.timestamp < z80->H.timestamp_end) {
 		//if(false && z80->pc != 0x215A) {
 		if(false) {
 			printf("%020lld: %04X: %02X: A=%02X SP=%04X\n"
-				, (unsigned long long)((z80->timestamp-lstamp)/(uint64_t)3)
+				, (unsigned long long)((z80->H.timestamp-lstamp)/(uint64_t)3)
 				, z80->pc, z80->gpr[RF], z80->gpr[RA], z80->sp);
 		}
 
@@ -367,7 +367,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				, sms->vdp.irq_out
 				, sms->vdp.irq_mask
 				, sms->vdp.status
-				, (unsigned long long)z80->timestamp
+				, (unsigned long long)z80->H.timestamp
 				);
 			*/
 
@@ -375,7 +375,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 		}
 		z80->noni = 0;
 
-		lstamp = z80->timestamp;
+		lstamp = z80->H.timestamp;
 		// Fetch
 		int ix = -1;
 		uint8_t op;
@@ -401,7 +401,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 				// Z=0
 				case 0x40: // IN B, (C)
-					z80->gpr[RB] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RB] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RB]&0xA8)
@@ -410,7 +410,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x48: // IN C, (C)
-					z80->gpr[RC] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RC] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RC]&0xA8)
@@ -419,7 +419,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x50: // IN D, (C)
-					z80->gpr[RD] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RD] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RD]&0xA8)
@@ -428,7 +428,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x58: // IN E, (C)
-					z80->gpr[RE] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RE] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RE]&0xA8)
@@ -437,7 +437,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x60: // IN H, (C)
-					z80->gpr[RH] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RH] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RH]&0xA8)
@@ -446,7 +446,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x68: // IN L, (C)
-					z80->gpr[RL] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RL] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RL]&0xA8)
@@ -455,7 +455,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x70: { // IN (C)
-					uint8_t tmp = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					uint8_t tmp = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (tmp&0xA8)
@@ -464,7 +464,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, 4);
 				} break;
 				case 0x78: // IN A, (C)
-					z80->gpr[RA] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp,
+					z80->gpr[RA] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]));
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RA]&0xA8)
@@ -475,49 +475,49 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 				// Z=1
 				case 0x41: // OUT (C), B
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RB]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x49: // OUT (C), C
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RC]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x51: // OUT (C), D
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RD]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x59: // OUT (C), E
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RE]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x61: // OUT (C), H
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RH]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x69: // OUT (C), L
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RL]);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x71: // OUT (C), 0
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						0);
 					Z80_ADD_CYCLES(z80, 4);
 					break;
 				case 0x79: // OUT (C), A
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RB]),
 						z80->gpr[RA]);
 					Z80_ADD_CYCLES(z80, 4);
@@ -595,11 +595,11 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RC]);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RB]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
@@ -607,11 +607,11 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RE]);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RD]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
@@ -619,11 +619,11 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RL]);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr, z80->gpr[RH]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
@@ -631,12 +631,12 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr,
 						(uint8_t)(z80->sp>>0));
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr,
 						(uint8_t)(z80->sp>>8));
 					Z80_ADD_CYCLES(z80, 3);
@@ -646,40 +646,40 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					z80->gpr[RC] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RC] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					z80->gpr[RB] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RB] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 				case 0x5B: { // LD DE, (nn)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					z80->gpr[RE] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RE] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					z80->gpr[RD] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RD] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 				case 0x6B: { // LD HL, (nn) (alt)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 				case 0x7B: { // LD SP, (nn)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					uint8_t spl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t spl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					uint8_t sph = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t sph = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					z80->sp = Z80NAME(pair)(sph, spl);
 				} break;
@@ -740,7 +740,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0x67: { // RRD
 					uint16_t addr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t val = 0xFF&(uint16_t)Z80NAME(mem_read)(Z80_STATE_ARGS,
-						z80->timestamp, addr);
+						z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					uint8_t na = (val&0x0F);
 					val = (val>>4);
@@ -748,7 +748,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					z80->gpr[RA] &= 0xF0;
 					z80->gpr[RA] |= na;
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, (uint8_t)(val));
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, (uint8_t)(val));
 					Z80_ADD_CYCLES(z80, 3);
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RA]&0xA8)
@@ -758,14 +758,14 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0x6F: { // RLD
 					uint16_t addr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t val = 0xFF&(uint16_t)Z80NAME(mem_read)(Z80_STATE_ARGS,
-						z80->timestamp, addr);
+						z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					val = (val<<4);
 					val |= ((z80->gpr[RA])&0x0F);
 					z80->gpr[RA] &= 0xF0;
 					z80->gpr[RA] |= (val>>8)&0x0F;
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, (uint8_t)(val));
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, (uint8_t)(val));
 					Z80_ADD_CYCLES(z80, 3);
 					z80->gpr[RF] = (z80->gpr[RF]&0x01)
 						| (z80->gpr[RA]&0xA8)
@@ -785,9 +785,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xA0: { // LDI
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RD]);
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 3+2);
 					z80->gpr[RF] = (z80->gpr[RF]&0xC1)
 						| ((dat+z80->gpr[RA])&0x08)
@@ -805,9 +805,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xB0: { // LDIR
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RD]);
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 3+2);
 					z80->gpr[RF] = (z80->gpr[RF]&0xC1)
 						| ((dat+z80->gpr[RA])&0x08)
@@ -829,9 +829,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xA8: { // LDD
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RD]);
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 3+2);
 					z80->gpr[RF] = (z80->gpr[RF]&0xC1)
 						| ((dat+z80->gpr[RA])&0x08)
@@ -849,9 +849,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xB8: { // LDDR
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RD]);
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 3+2);
 					z80->gpr[RF] = (z80->gpr[RF]&0xC1)
 						| ((dat+z80->gpr[RA])&0x08)
@@ -874,7 +874,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 				case 0xA1: { // CPI
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					uint8_t c = z80->gpr[RF]&0x01;
 					Z80NAME(sub8)(z80, z80->gpr[RA], dat);
@@ -895,7 +895,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				} break;
 				case 0xB1: { // CPIR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					uint8_t c = z80->gpr[RF]&0x01;
 					Z80NAME(sub8)(z80, z80->gpr[RA], dat);
@@ -922,7 +922,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 				case 0xA9: { // CPD
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					uint8_t c = z80->gpr[RF]&0x01;
 					Z80NAME(sub8)(z80, z80->gpr[RA], dat);
@@ -943,7 +943,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				} break;
 				case 0xB9: { // CPDR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 3);
 					uint8_t c = z80->gpr[RF]&0x01;
 					Z80NAME(sub8)(z80, z80->gpr[RA], dat);
@@ -976,9 +976,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xA2: { // INI
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -995,9 +995,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xB2: { // INIR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1021,9 +1021,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xAA: { // IND
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1040,9 +1040,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xBA: { // INDR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1068,10 +1068,10 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xA3: { // OUTI
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					//if(z80->gpr[RC] == 0xBF) printf("OUTI %02X %02X %04X\n", z80->gpr[RB], z80->gpr[RC], sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1088,10 +1088,10 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xB3: { // OTIR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					//printf("OTIR %02X %02X %04X\n", z80->gpr[RB], z80->gpr[RC], sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1115,9 +1115,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xAB: { // OUTD
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1134,9 +1134,9 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				case 0xBB: { // OTDR
 					uint16_t sr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
 					uint16_t dr = Z80NAME(pair_pbe)(&z80->gpr[RB]);
-					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, sr);
+					uint8_t dat = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, sr);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp, dr, dat);
+					Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp, dr, dat);
 					Z80_ADD_CYCLES(z80, 4);
 					z80->gpr[RB]--;
 
@@ -1184,7 +1184,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				z80->wz[0] = (uint8_t)(addr>>8);
 				z80->wz[1] = (uint8_t)(addr>>0);
 				Z80_ADD_CYCLES(z80, 1);
-				val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+				val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 				Z80_ADD_CYCLES(z80, 4);
 			}
 
@@ -1203,7 +1203,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			} else if(oz == 6) {
 				bval = z80->wz[0];
-				val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp,
+				val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp,
 					Z80NAME(pair_pbe)(&z80->gpr[RH]));
 				Z80_ADD_CYCLES(z80, 4);
 
@@ -1359,7 +1359,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			} else if(oz == 6) {
 				if(ix < 0) {
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RH]),
 						val);
 					Z80_ADD_CYCLES(z80, 3);
@@ -1372,7 +1372,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			// Write to (Iz+d) if we use DD/FD
 			if(ix >= 0) {
 				uint16_t addr = Z80NAME(pair_pbe)(&z80->wz[0]);
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 					addr,
 					val);
 				Z80_ADD_CYCLES(z80, 3);
@@ -1390,8 +1390,8 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			if(op == 0x76) {
 				// HALT
-				if(TIME_IN_ORDER(z80->timestamp, z80->timestamp_end)) {
-					z80->timestamp = z80->timestamp_end;
+				if(TIME_IN_ORDER(z80->H.timestamp, z80->H.timestamp_end)) {
+					z80->H.timestamp = z80->H.timestamp_end;
 				}
 				z80->halted = true;
 				z80->noni = 0;
@@ -1403,14 +1403,14 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 						, sms->vdp.irq_out
 						, sms->vdp.irq_mask
 						, sms->vdp.status
-						, (unsigned long long)z80->timestamp
+						, (unsigned long long)z80->H.timestamp
 						);
 					*/
 
 					Z80NAME(irq)(z80, Z80_STATE_ARGS, 0xFF);
 					continue;
 				} else {
-					while(TIME_IN_ORDER(z80->timestamp, timestamp)) {
+					while(TIME_IN_ORDER(z80->H.timestamp, timestamp)) {
 						Z80_ADD_CYCLES(z80, 4);
 					}
 					return;
@@ -1429,10 +1429,10 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			} else if(oz == 6) {
 				if(ix >= 0) {
 					uint16_t addr = Z80NAME(fetch_ix_d)(z80, Z80_STATE_ARGS, ix);
-					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
-					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp,
+					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RH]));
 					Z80_ADD_CYCLES(z80, 3);
 				}
@@ -1448,12 +1448,12 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			} else if(oy == 6) {
 				if(ix >= 0) {
 					uint16_t addr = Z80NAME(fetch_ix_d)(z80, Z80_STATE_ARGS, ix);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						addr,
 						val);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RH]),
 						val);
 					Z80_ADD_CYCLES(z80, 3);
@@ -1480,10 +1480,10 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			} else if(oz == 6) {
 				if(ix >= 0) {
 					uint16_t addr = Z80NAME(fetch_ix_d)(z80, Z80_STATE_ARGS, ix);
-					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
-					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp,
+					val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RH]));
 					Z80_ADD_CYCLES(z80, 3);
 				}
@@ -1654,24 +1654,24 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			// Z=2
 			case 0x02: // LD (BC), A
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 					Z80NAME(pair_pbe)(&z80->gpr[RB]),
 					z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0x12: // LD (DE), A
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 					Z80NAME(pair_pbe)(&z80->gpr[RD]),
 					z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0x0A: // LD A, (BC)
-				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp,
+				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp,
 					Z80NAME(pair_pbe)(&z80->gpr[RB]));
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0x1A: // LD A, (DE)
-				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp,
+				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp,
 					Z80NAME(pair_pbe)(&z80->gpr[RD]));
 				Z80_ADD_CYCLES(z80, 3);
 				break;
@@ -1682,27 +1682,27 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, z80->idx[ix&1][1]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, z80->idx[ix&1][1]);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, z80->idx[ix&1][0]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, z80->idx[ix&1][0]);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// LD (nn), HL
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, z80->gpr[RL]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, z80->gpr[RL]);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, z80->gpr[RH]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, z80->gpr[RH]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0x32: { // LD (nn), A
 				uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 				uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 				uint16_t addr = Z80NAME(pair)(nh, nl);
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, z80->gpr[RA]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 3);
 			} break;
 			case 0x2A:
@@ -1711,27 +1711,27 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					z80->idx[ix&1][1] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->idx[ix&1][1] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					z80->idx[ix&1][0] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->idx[ix&1][0] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// LD HL, (nn)
 					uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					uint16_t addr = Z80NAME(pair)(nh, nl);
-					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 					addr++;
-					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0x3A: { // LD A, (nn)
 				uint8_t nl = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 				uint8_t nh = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 				uint16_t addr = Z80NAME(pair)(nh, nl);
-				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 				Z80_ADD_CYCLES(z80, 3);
 			} break;
 
@@ -1810,18 +1810,18 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			case 0x34: if(ix >= 0) {
 					// INC (Iz+d)
 					uint16_t addr = Z80NAME(fetch_ix_d)(z80, Z80_STATE_ARGS, ix);
-					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
 					val = Z80NAME(inc8)(z80, val);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, val);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, val);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// INC (HL)
 					uint16_t addr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
 					val = Z80NAME(inc8)(z80, val);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, val);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, val);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0x3C: // INC A
@@ -1858,18 +1858,18 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			case 0x35: if(ix >= 0) {
 					// DEC (Iz+d)
 					uint16_t addr = Z80NAME(fetch_ix_d)(z80, Z80_STATE_ARGS, ix);
-					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
 					val = Z80NAME(dec8)(z80, val);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, val);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, val);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// DEC (HL)
 					uint16_t addr = Z80NAME(pair_pbe)(&z80->gpr[RH]);
-					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, addr);
+					uint8_t val = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, addr);
 					Z80_ADD_CYCLES(z80, 4);
 					val = Z80NAME(dec8)(z80, val);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, val);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, val);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0x3D: // DEC A
@@ -1909,12 +1909,12 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 					Z80_ADD_CYCLES(z80, -5);
 					uint8_t dat = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 					Z80_ADD_CYCLES(z80, 2);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, addr, dat);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, addr, dat);
 					Z80_ADD_CYCLES(z80, 3);
 			
 				} else {
 					// LD (HL), n
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp,
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp,
 						Z80NAME(pair_pbe)(&z80->gpr[RH]),
 						Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS));
 					Z80_ADD_CYCLES(z80, 3);
@@ -2056,34 +2056,34 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			// Z=1
 			case 0xC1: // POP BC
-				z80->gpr[RC] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RC] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
-				z80->gpr[RB] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RB] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0xD1: // POP DE
-				z80->gpr[RE] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RE] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
-				z80->gpr[RD] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RD] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0xE1: if(ix >= 0) {
 					// POP Iz
-					z80->idx[ix&1][1] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+					z80->idx[ix&1][1] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 					Z80_ADD_CYCLES(z80, 3);
-					z80->idx[ix&1][0] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+					z80->idx[ix&1][0] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// POP HL
-					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+					z80->gpr[RL] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 					Z80_ADD_CYCLES(z80, 3);
-					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+					z80->gpr[RH] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0xF1: // POP AF
-				z80->gpr[RF] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RF] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
-				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp++);
+				z80->gpr[RA] = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp++);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 
@@ -2161,14 +2161,14 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				port &= 0x00FF;
 				port |= (port << 8);
 				//printf("IO WRITE %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
-				Z80NAME(io_write)(Z80_STATE_ARGS, z80->timestamp, port, z80->gpr[RA]);
+				Z80NAME(io_write)(Z80_STATE_ARGS, z80->H.timestamp, port, z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 4);
 			} break;
 			case 0xDB: { // IN A, (n)
 				uint16_t port = Z80NAME(fetch_op_x)(z80, Z80_STATE_ARGS);
 				port &= 0x00FF;
 				port |= (port << 8);
-				z80->gpr[RA] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->timestamp, port);
+				z80->gpr[RA] = Z80NAME(io_read)(Z80_STATE_ARGS, z80->H.timestamp, port);
 				//printf("IN %04X %02X [%04X]\n", port, z80->gpr[RA], z80->pc-2);
 				z80->gpr[RF] = (z80->gpr[RF]&0x01)
 					| (z80->gpr[RA]&0xA8)
@@ -2180,13 +2180,13 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 			case 0xE3: if(ix >= 0) {
 					// EX (SP), Iz
 					// XXX: actual timing pattern is unknown
-					uint8_t tl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp+0);
+					uint8_t tl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+0);
 					Z80_ADD_CYCLES(z80, 4);
-					uint8_t th = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp+1);
+					uint8_t th = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+1);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, z80->sp+0, z80->idx[ix&1][1]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+0, z80->idx[ix&1][1]);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, z80->sp+1, z80->idx[ix&1][0]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+1, z80->idx[ix&1][0]);
 					Z80_ADD_CYCLES(z80, 3);
 					z80->idx[ix&1][1] = tl;
 					z80->idx[ix&1][0] = th;
@@ -2194,13 +2194,13 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				} else {
 					// EX (SP), HL
 					// XXX: actual timing pattern is unknown
-					uint8_t tl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp+0);
+					uint8_t tl = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+0);
 					Z80_ADD_CYCLES(z80, 4);
-					uint8_t th = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->timestamp, z80->sp+1);
+					uint8_t th = Z80NAME(mem_read)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+1);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, z80->sp+0, z80->gpr[RL]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+0, z80->gpr[RL]);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, z80->sp+1, z80->gpr[RH]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, z80->sp+1, z80->gpr[RH]);
 					Z80_ADD_CYCLES(z80, 3);
 					z80->gpr[RL] = tl;
 					z80->gpr[RH] = th;
@@ -2253,34 +2253,34 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 			// Z=5
 			case 0xC5: // PUSH BC
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RB]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RB]);
 				Z80_ADD_CYCLES(z80, 4);
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RC]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RC]);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0xD5: // PUSH DE
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RD]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RD]);
 				Z80_ADD_CYCLES(z80, 4);
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RE]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RE]);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 			case 0xE5: if(ix >= 0) {
 					// PUSH Iz
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->idx[ix&1][0]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->idx[ix&1][0]);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->idx[ix&1][1]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->idx[ix&1][1]);
 					Z80_ADD_CYCLES(z80, 3);
 				} else {
 					// PUSH HL
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RH]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RH]);
 					Z80_ADD_CYCLES(z80, 4);
-					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RL]);
+					Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RL]);
 					Z80_ADD_CYCLES(z80, 3);
 				} break;
 			case 0xF5: // PUSH AF
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RA]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RA]);
 				Z80_ADD_CYCLES(z80, 4);
-				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->timestamp, --z80->sp, z80->gpr[RF]);
+				Z80NAME(mem_write)(Z80_STATE_ARGS, z80->H.timestamp, --z80->sp, z80->gpr[RF]);
 				Z80_ADD_CYCLES(z80, 3);
 				break;
 
@@ -2360,7 +2360,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 void Z80NAME(init)(struct SMSGlobal *G, struct Z80 *z80)
 {
-	*z80 = (struct Z80){ .timestamp=0 };
+	*z80 = (struct Z80){ .H={.timestamp=0,}, };
 	Z80NAME(reset)(z80);
 }
 

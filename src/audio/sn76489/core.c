@@ -1,7 +1,8 @@
 //include "audio/sn76489/all.h"
 
-// XXX: do we move this to SMSGlobal?
+// XXX: could be moved to some form of global state?
 #ifndef DEDI
+static int32_t outhpf_charge;
 static int16_t sound_data[PSG_OUT_BUF_LEN];
 static size_t sound_data_out_offs;
 static size_t sound_data_offs = 0;
@@ -112,16 +113,16 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 #endif
 }
 
-void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
+void psg_run(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	if(!TIME_IN_ORDER(psg->timestamp, timestamp)) {
+	if(!TIME_IN_ORDER(psg->H.timestamp, timestamp)) {
 		return;
 	}
 
-	uint64_t timediff = timestamp - psg->timestamp;
+	uint64_t timediff = timestamp - psg->H.timestamp;
 
 #ifndef DEDI
-	if(G->H.no_draw) {
+	if(G->no_draw) {
 #endif
 		for(int ch = 0; ch < 4; ch++) {
 			if(psg->period[ch] <= 1) {
@@ -160,7 +161,7 @@ void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 			}
 		}
 
-		psg->timestamp = timestamp;
+		psg->H.timestamp = timestamp;
 		return;
 #ifndef DEDI
 	}
@@ -210,8 +211,13 @@ void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 		// but it doesn't really matter right now,
 		// as long as we have one that works.
 		outval <<= 8;
-		G->outhpf_charge += (outval - G->outhpf_charge)>>14;
-		outval -= G->outhpf_charge;
+
+		// FIXME: get a generic framework working for this
+		//G->outhpf_charge += (outval - G->outhpf_charge)>>14;
+		//outval -= G->outhpf_charge;
+		outhpf_charge += (outval - outhpf_charge)>>14;
+		outval -= outhpf_charge;
+
 		outval += (1<<(9-1));
 		//outval >>= 9;
 		outval >>= 11;
@@ -233,14 +239,14 @@ void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 	SDL_UnlockAudio();
 	//assert(SDL_AtomicGet(&sound_data_len) < PSG_OUT_BUF_LEN);
 
-	psg->timestamp = timestamp;
+	psg->H.timestamp = timestamp;
 #endif
 }
 
-void psg_init(struct SMSGlobal *G, struct PSG *psg)
+void psg_init(struct EmuGlobal *G, struct PSG *psg)
 {
 	psg_global_init();
-	*psg = (struct PSG){ .timestamp=0 };
+	*psg = (struct PSG){ .H = {.timestamp=0,}, };
 	psg->vol[0] = 0xF;
 	psg->vol[1] = 0xF;
 	psg->vol[2] = 0xF;
@@ -251,9 +257,9 @@ void psg_init(struct SMSGlobal *G, struct PSG *psg)
 	psg->period[3] = 0x10;
 }
 
-void psg_write(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void psg_write(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	psg_run(psg, G, sms, timestamp);
+	psg_run(psg, G, state, timestamp);
 
 	//printf("PSG %02X\n", val);
 	if((val&0x80) != 0) {
@@ -342,7 +348,7 @@ void psg_write(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t t
 				break;
 
 			default:
-				psg_write(psg, G, sms, timestamp, (val&0xF)|(psg->lcmd&0xF0));
+				psg_write(psg, G, state, timestamp, (val&0xF)|(psg->lcmd&0xF0));
 				break;
 		}
 

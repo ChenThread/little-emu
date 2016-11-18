@@ -27,9 +27,8 @@
 
 struct SMS
 {
-	uint8_t vram[16384];
+	struct EmuState H;
 	uint8_t ram[8192];
-	uint8_t cram[32];
 	struct Z80 z80;
 	struct VDP vdp;
 	struct PSG psg;
@@ -38,9 +37,6 @@ struct SMS
 	uint8_t memcfg;
 	uint8_t iocfg;
 	uint8_t hlatch;
-
-	uint64_t timestamp;
-	uint64_t timestamp_end;
 } __attribute__((__packed__));
 
 struct SMSGlobal
@@ -60,7 +56,7 @@ struct SMSGlobal
 	uint8_t frame_data[SCANLINES][342];
 
 	// PSG
-	int32_t outhpf_charge;
+	//int32_t outhpf_charge;
 };
 
 // sms.c
@@ -72,18 +68,18 @@ extern void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int con
 
 // psg.c
 void psg_pop_16bit_mono(int16_t *buf, size_t len);
-void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
-void psg_init(struct SMSGlobal *G, struct PSG *psg);
-void psg_write(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
+void psg_run(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+void psg_init(struct EmuGlobal *G, struct PSG *psg);
+void psg_write(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val);
 
 // vdp.c
-uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
-uint8_t vdp_read_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
-void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
-void vdp_write_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
-void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
-void vdp_init(struct SMSGlobal *G, struct VDP *vdp);
-void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+uint8_t vdp_read_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+uint8_t vdp_read_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+void vdp_write_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val);
+void vdp_write_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val);
+void vdp_run(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+void vdp_init(struct EmuGlobal *G, struct VDP *vdp);
+void vdp_estimate_line_irq(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
 
 // z80.c
 void sms_z80_reset(struct Z80 *z80);

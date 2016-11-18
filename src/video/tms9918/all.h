@@ -14,7 +14,10 @@
 
 struct VDP
 {
-	// VDP state
+	struct EmuState H;
+	uint8_t vram[16384];
+	uint8_t cram[32];
+
 	uint8_t sprd[8][4];
 	uint8_t regs[16];
 	uint8_t sprx[8];
@@ -29,9 +32,5 @@ struct VDP
 
 	uint8_t irq_out;
 	uint8_t irq_mask;
-	
-	// Tracking state
-	uint64_t timestamp;
-	uint64_t timestamp_end;
 } __attribute__((__packed__));
 

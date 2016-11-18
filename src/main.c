@@ -22,7 +22,7 @@
 void *botlib = NULL;
 void (*botlib_init)(struct EmuGlobal *G, int argc, char *argv[]) = NULL;
 void (*botlib_update)(struct EmuGlobal *G) = NULL;
-void (*botlib_hook_input)(struct EmuGlobal *G, void *sms, uint64_t timestamp) = NULL;
+void (*botlib_hook_input)(struct EmuGlobal *G, void *state, uint64_t timestamp) = NULL;
 
 #ifndef DEDI
 // TODO: unhardcode
@@ -167,13 +167,16 @@ int main(int argc, char *argv[])
 	Gbase->twait = time_now();
 	for(;;) {
 		// FIXME make + use generic API
-		struct SMS *sms = (struct SMS *)Gbase->current_state;
-		struct SMS sms_ndsim;
-		botlib_hook_input(Gbase, sms, sms->timestamp);
+		struct EmuState *state = (struct EmuState *)Gbase->current_state;
+		//struct SMS *sms = (struct SMS *)Gbase->current_state;
+		botlib_hook_input(Gbase, state, state->timestamp);
 		bot_update();
-		lemu_copy(Gbase, &sms_ndsim, sms);
-		lemu_run_frame(Gbase, sms, false);
+		//lemu_copy(Gbase, &sms_ndsim, sms);
+		lemu_run_frame(Gbase, state, false);
+
+		// useful snippet
 		/*
+		struct SMS sms_ndsim;
 		sms_ndsim.no_draw = true;
 		lemu_run_frame(Gbase, &sms_ndsim, true);
 		sms_ndsim.no_draw = false;

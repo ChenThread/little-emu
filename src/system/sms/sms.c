@@ -70,8 +70,9 @@ static bool sms_th_pin_state(uint8_t ioctl)
 	return true;
 }
 
-void sms_z80_io_write(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint16_t addr, uint8_t val)
+void sms_z80_io_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint16_t addr, uint8_t val)
 {
+	struct SMS *sms = (struct SMS *)state;
 	int port = ((addr>>5)&6)|(addr&1);
 	//if(((addr>>8)&0xFF) == 0xBE && addr != 0xBEBE) { printf("IO WRITE %04X %d\n", addr, port); }
 
@@ -105,15 +106,15 @@ void sms_z80_io_write(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, 
 
 		case 2: // PSG / V counter
 		case 3: // PSG / H counter
-			psg_write(&sms->psg, G, sms, timestamp, val);
+			psg_write(&sms->psg, H, state, timestamp, val);
 			break;
 
 		case 4: // VDP data
-			vdp_write_data(&sms->vdp, G, sms, timestamp, val);
+			vdp_write_data(&sms->vdp, H, state, timestamp, val);
 			break;
 
 		case 5: // VDP control
-			vdp_write_ctrl(&sms->vdp, G, sms, timestamp, val);
+			vdp_write_ctrl(&sms->vdp, H, state, timestamp, val);
 			break;
 
 		case 6: // I/O port A
@@ -139,8 +140,9 @@ void sms_z80_io_write(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, 
 	}
 }
 
-uint8_t sms_z80_io_read(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint16_t addr)
+uint8_t sms_z80_io_read(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint16_t addr)
 {
+	struct SMS *sms = (struct SMS *)state;
 	int port = ((addr>>5)&6)|(addr&1);
 
 	switch(port)
@@ -180,7 +182,7 @@ uint8_t sms_z80_io_read(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp
 			return sms->hlatch;
 
 		case 4: // VDP data
-			return vdp_read_data(&sms->vdp, G, sms, timestamp);
+			return vdp_read_data(&sms->vdp, H, state, timestamp);
 
 		case 5: // VDP control
 			/*
@@ -194,19 +196,19 @@ uint8_t sms_z80_io_read(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp
 				//printf("HC VDP %04X = %02X %02X\n", sms->z80.pc, h, sms->vdp.status);
 			}
 			*/
-			return vdp_read_ctrl(&sms->vdp, G, sms, timestamp);
+			return vdp_read_ctrl(&sms->vdp, H, state, timestamp);
 
 		case 6: // I/O port A
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
 			if(sms_hook_poll_input != NULL) {
-				sms_hook_poll_input(G, sms, 0, timestamp);
+				sms_hook_poll_input((struct SMSGlobal *)H, sms, 0, timestamp);
 			}
 			return sms->joy[0];
 
 		case 7: // I/O port B
 			if((sms->memcfg&0x04) != 0) { return 0xFF; }
 			if(sms_hook_poll_input != NULL) {
-				sms_hook_poll_input(G, sms, 1, timestamp);
+				sms_hook_poll_input((struct SMSGlobal *)H, sms, 1, timestamp);
 			}
 			return sms->joy[1];
 
@@ -219,7 +221,7 @@ uint8_t sms_z80_io_read(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp
 
 void sms_init(struct SMSGlobal *G, struct SMS *sms)
 {
-	*sms = (struct SMS){ .timestamp = 0, };
+	*sms = (struct SMS){ .H={.timestamp = 0,}, };
 	sms->paging[3] = 0; // 0xFFFC
 	sms->paging[0] = 0; // 0xFFFD
 	sms->paging[1] = 1; // 0xFFFE
@@ -230,10 +232,10 @@ void sms_init(struct SMSGlobal *G, struct SMS *sms)
 	sms->iocfg = 0xFF;
 	sms->hlatch = 0x80; // TODO: find out what this is on reset
 	sms_z80_init(G, &(sms->z80));
-	vdp_init(G, &(sms->vdp));
-	psg_init(G, &(sms->psg));
-	//sms->z80.timestamp = 1;
-	//sms->vdp.timestamp = 0;
+	vdp_init(&(G->H), &(sms->vdp));
+	psg_init(&(G->H), &(sms->psg));
+	//sms->z80.H.timestamp = 1;
+	//sms->vdp.H.timestamp = 0;
 
 	sms->ram[0] = 0xAB;
 }
@@ -245,21 +247,21 @@ void sms_copy(struct SMS *dest, struct SMS *src)
 
 void sms_run(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
-	if(!TIME_IN_ORDER(sms->timestamp, timestamp)) {
+	if(!TIME_IN_ORDER(sms->H.timestamp, timestamp)) {
 		return;
 	}
 
-	//uint64_t dt = timestamp - sms->timestamp;
-	while(TIME_IN_ORDER(sms->z80.timestamp_end, timestamp)) {
-		sms->z80.timestamp_end = timestamp;
-		vdp_estimate_line_irq(&(sms->vdp), G, sms, sms->vdp.timestamp);
-		//printf("%016lX %016lX %016lX %016lX %016lX\n", timestamp, sms->z80.timestamp, sms->z80.timestamp_end, sms->vdp.timestamp, sms->vdp.timestamp_end);
-		sms_z80_run(&(sms->z80), G, sms, sms->z80.timestamp_end);
-		vdp_run(&(sms->vdp), G, sms, sms->z80.timestamp_end);
-		psg_run(&(sms->psg), G, sms, sms->z80.timestamp_end);
+	//uint64_t dt = timestamp - sms->H.timestamp;
+	while(TIME_IN_ORDER(sms->z80.H.timestamp_end, timestamp)) {
+		sms->z80.H.timestamp_end = timestamp;
+		vdp_estimate_line_irq(&(sms->vdp), &(G->H), &(sms->H), sms->vdp.H.timestamp);
+		//printf("%016lX %016lX %016lX %016lX %016lX\n", timestamp, sms->z80.H.timestamp, sms->z80.H.timestamp_end, sms->vdp.H.timestamp, sms->vdp.H.timestamp_end);
+		sms_z80_run(&(sms->z80), G, sms, sms->z80.H.timestamp_end);
+		vdp_run(&(sms->vdp), &(G->H), &(sms->H), sms->z80.H.timestamp_end);
+		psg_run(&(sms->psg), &(G->H), &(sms->H), sms->z80.H.timestamp_end);
 	}
 
-	sms->timestamp = timestamp;
+	sms->H.timestamp = timestamp;
 }
 
 void sms_run_frame(struct SMSGlobal *G, struct SMS *sms)
@@ -271,20 +273,20 @@ void sms_run_frame(struct SMSGlobal *G, struct SMS *sms)
 #endif
 
 	// Run a frame
-	if(sms->timestamp == 0) {
-		sms->z80.timestamp = pt_VINT1;// - (pt_VINT1%684);
-		sms_run(G, sms, sms->timestamp + pt_VINT1);
+	if(sms->H.timestamp == 0) {
+		sms->z80.H.timestamp = pt_VINT1;// - (pt_VINT1%684);
+		sms_run(G, sms, sms->H.timestamp + pt_VINT1);
 	}
 #if USE_NTSC
-	sms_run(G, sms, sms->timestamp + 684*SCANLINES-pt_VINT1);
+	sms_run(G, sms, sms->H.timestamp + 684*SCANLINES-pt_VINT1);
 #else
-	sms_run(G, sms, sms->timestamp + pt_VINT2-pt_VINT1);
-	sms_run(G, sms, sms->timestamp + 684*SCANLINES-pt_VINT2);
+	sms_run(G, sms, sms->H.timestamp + pt_VINT2-pt_VINT1);
+	sms_run(G, sms, sms->H.timestamp + 684*SCANLINES-pt_VINT2);
 	// FIXME: V-centre the frame properly so this doesn't break
-	//sms_run(G, sms, sms->timestamp + pt_VINT3-pt_VINT2);
-	//sms_run(G, sms, sms->timestamp + 684*SCANLINES-pt_VINT3);
+	//sms_run(G, sms, sms->H.timestamp + pt_VINT3-pt_VINT2);
+	//sms_run(G, sms, sms->H.timestamp + 684*SCANLINES-pt_VINT3);
 #endif
-	sms_run(G, sms, sms->timestamp + pt_VINT1);
+	sms_run(G, sms, sms->H.timestamp + pt_VINT1);
 
 	//sms_copy(&sms_prev, &sms_current);
 }
@@ -544,14 +546,14 @@ static void sms_init_global(struct SMSGlobal *G, const char *fname, const void *
 		.name = "Z80 RAM",
 	};
 	G->ram_heads[1] = (struct EmuRamHead){
-		.len = sizeof(G->current.vram),
-		.ptr = G->current.vram,
+		.len = sizeof(G->current.vdp.vram),
+		.ptr = G->current.vdp.vram,
 		.flags = 0,
 		.name = "VDP VRAM",
 	};
 	G->ram_heads[2] = (struct EmuRamHead){
-		.len = sizeof(G->current.cram),
-		.ptr = G->current.cram,
+		.len = sizeof(G->current.vdp.cram),
+		.ptr = G->current.vdp.cram,
 		.flags = 0,
 		.name = "VDP CRAM",
 	};

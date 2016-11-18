@@ -143,7 +143,7 @@ void bot_update(struct SMSGlobal *G)
 		}
 	}
 	for(int i = 0; i < 16384; i++) {
-		if(safe_state.vram[i] != broken_state.vram[i]) {
+		if(safe_state.vdp.vram[i] != broken_state.vdp.vram[i]) {
 			vdiff++;
 		}
 	}
