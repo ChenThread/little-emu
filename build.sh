@@ -1,20 +1,16 @@
 #!/bin/sh
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms-dedi.so \
+	-Isrc \
 	\
-	src/psg.c \
-	src/sms.c \
-	src/vdp.c \
-	src/z80.c \
+	src/system/sms/*.c \
 	\
 	-DDEDI -lm -Wall && \
 gcc -std=gnu99 -O2 -g -o dedi-lsms src/main.c -L. -Wl,-rpath,. -littlesms-dedi \
 	-DDEDI -ldl -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms.so \
+	-Isrc \
 	\
-	src/psg.c \
-	src/sms.c \
-	src/vdp.c \
-	src/z80.c \
+	src/system/sms/*.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
 gcc -std=gnu99 -O2 -g -o lsms src/main.c -L. -Wl,-rpath,. -littlesms \

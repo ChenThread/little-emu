@@ -8,8 +8,6 @@
 
 #define PSG_OUT_BUF_LEN (1<<24)
 
-#define VDP_ADD_CYCLES(vdp, v) (vdp)->timestamp += ((v)*2)
-
 #define RB 0
 #define RC 1
 #define RD 2

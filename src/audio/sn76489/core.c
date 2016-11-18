@@ -1,4 +1,3 @@
-#include "common.h"
 // XXX: do we move this to SMSGlobal?
 #ifndef DEDI
 int16_t sound_data[PSG_OUT_BUF_LEN];

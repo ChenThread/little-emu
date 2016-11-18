@@ -1,6 +1,3 @@
-#include "common.h"
-#include "cfg-z80-sms.h"
-
 void Z80NAME(reset)(struct Z80 *z80)
 {
 	z80->iff1 = 0;
