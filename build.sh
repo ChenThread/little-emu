@@ -5,6 +5,7 @@ gcc -std=gnu99 -O2 -g -shared -fPIC -o libittle-emu.so \
 	-Isrc/system/sms \
 	\
 	src/system/sms/*.c \
+	src/core.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
 gcc -std=gnu99 -O2 -g -o lemu -Isrc src/main.c -L. -Wl,-rpath,. -little-emu \

@@ -46,10 +46,15 @@ struct SMS
 
 struct SMSGlobal
 {
+	struct EmuGlobal H;
 	struct SMS current;
+
+	struct EmuRamHead ram_heads[3];
+	struct EmuRomHead rom_heads[2];
 
 	// SMS
 	uint8_t rom[4*1024*1024];
+	size_t rom_len;
 	uint64_t twait;
 	bool rom_is_banked;
 
@@ -58,11 +63,11 @@ struct SMSGlobal
 
 	// PSG
 	int32_t outhpf_charge;
-} __attribute__((__packed__));
+};
 
 // sms.c
 extern struct SMSGlobal Gsms;
-uint64_t time_now(void);
+void sms_init_global(struct SMSGlobal *G, const char *fname, const void *data, size_t len);
 void sms_init(struct SMSGlobal *G, struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
 void sms_run(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);

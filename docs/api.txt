@@ -1,0 +1,114 @@
+DRAFT. likely to be wrong.
+
+TODO:
+- inputs
+- ROM detection
+
+We care about *state* and *global*.
+`state` is serialisable.
+`global` is merely runtime information.
+ONE CORE PER SHARED OBJECT.
+
+const char lemu_core_name[];
+
+struct EmuGlobals *lemu_core_global_new(const char *fname, const void *data, size_t len);
+void lemu_core_global_free(struct EmuGlobals *G);
+void lemu_core_state_init(struct EmuGlobals *G, void *state);
+
+bool lemu_core_run_frame(void *globals, void *state);
+
+// structure must not be packed
+// this does not need to be serialised at all
+// actually, please don't serialise this
+struct EmuGlobal {
+	// Pointers and lengths
+	const char *core_name; // MUST point to lemu_core_name
+	size_t common_header_len;
+	size_t full_global_len;
+	size_t state_len;
+
+	size_t ram_count;
+	struct EmuRamHead {
+		size_t len;
+		void *ptr;
+		uintptr_t flags; // only low 32 bits used
+		char *name;
+	} *ram_ptrs;
+
+	size_t rom_count;
+	struct EmuRomHead {
+		size_t len;
+		void *ptr;
+		uintptr_t flags; // only low 32 bits used
+		char *name;
+	} *rom_ptrs;
+
+	size_t chicken_pointer_count;
+	void **chicken_pointers;
+
+	size_t global_input_count;
+	const char **global_input_names;
+	size_t player_input_count;
+	const char **player_input_names;
+	size_t player_count;
+
+	// Common data
+	void *current_state;// packed fixed-size structure with no pointers in it
+	uint64_t twait;
+
+	// Core-specific data
+	uint8_t extra_data[];
+};
+
+RAM types: use whatever
+here's some examples:
+	SMS:
+		- "Z80 RAM"
+		- "VRAM"
+		- "CRAM"
+
+	MD:
+		- "68K RAM"
+		- "Z80 RAM"
+		- "VRAM"
+		- "CRAM"
+		- "VSRAM"
+		possibly at least one more thing?
+
+	NES:
+		- "6502 RAM"
+		- "CHR RAM"
+
+	IBM PC:
+		- "x86 RAM"
+		- "VGA VRAM"
+
+	PS1:
+		- "MIPS RAM"
+		- "Scratchpad RAM" - this'll be within the MIPS struct
+		- "VRAM"
+		- "SPU RAM"
+		- probably more
+
+ROM types: may have a convention
+possible examples:
+	SMS:
+		- "Cartridge ROM"
+		- "Card ROM"
+		- "BIOS"
+
+	MD:
+		- "Cartridge ROM"
+		- "BIOS" - optional of course!
+
+	NES:
+		- "Cartridge ROM"
+		- "CHR ROM"
+
+	IBM PC:
+		- "BIOS"
+		- "VGA BIOS"
+
+	PS1:
+		- "BIOS"
+
