@@ -527,6 +527,7 @@ static void sms_init_global(struct SMSGlobal *G, const char *fname, const void *
 			.chicken_pointer_count = 0,
 			.chicken_pointers = NULL,
 
+			.input_button_count = 6,
 			.player_count = 2,
 		},
 	};
@@ -601,3 +602,37 @@ void lemu_core_state_init(struct EmuGlobal *G, void *state)
 	sms_init((struct SMSGlobal *)G, (struct SMS *)state);
 }
 
+void lemu_core_audio_callback(struct EmuGlobal *G, void *state, uint8_t *stream, int len)
+{
+	psg_pop_16bit_mono((int16_t *)stream, len >> 1);
+}
+
+void lemu_core_surface_configure(struct EmuGlobal *G, struct EmuSurface *S)
+{
+	S->width = 342;
+	S->height = SCANLINES;
+	S->format = EMU_SURFACE_FORMAT_BGRA_32;
+}
+
+void lemu_core_video_callback(struct EmuGlobal *G, struct EmuSurface *S)
+{
+	for(int y = 0; y < SCANLINES; y++) {
+		uint32_t *pp = (uint32_t *)(((uint8_t *)S->pixels) + S->pitch*y);
+		for(int x = 0; x < 342; x++) {
+			uint32_t v = ((struct SMSGlobal *)G)->frame_data[y][x];
+			uint32_t r = ((v>>0)&3)*0x55;
+			uint32_t g = ((v>>2)&3)*0x55;
+			uint32_t b = ((v>>4)&3)*0x55;
+			pp[x] = (b<<24)|(g<<16)|(r<<8);
+		}
+	}
+}
+
+void lemu_core_handle_input(struct EmuGlobal *G, void *state, int player_id, int input_id, bool down)
+{
+	int joy_id = (player_id * 6) + input_id;
+	struct SMS *sms = (struct SMS*) state;
+
+	if (down) sms->joy[joy_id >> 3] &= ~(1 << (joy_id & 7));
+	else sms->joy[joy_id >> 3] |= (1 << (joy_id & 7));
+}

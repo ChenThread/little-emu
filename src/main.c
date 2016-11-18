@@ -22,12 +22,16 @@
 void *botlib = NULL;
 void (*botlib_init)(struct EmuGlobal *G, int argc, char *argv[]) = NULL;
 void (*botlib_update)(struct EmuGlobal *G) = NULL;
-uint8_t (*botlib_hook_input)(struct EmuGlobal *G, void *sms, uint64_t timestamp, int port) = NULL;
+void (*botlib_hook_input)(struct EmuGlobal *G, void *sms, uint64_t timestamp) = NULL;
 
 #ifndef DEDI
+// TODO: unhardcode
+static SDL_Keycode keymap[] = {SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_KP_2, SDLK_KP_3};
+
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
+struct EmuSurface *Gsurface = NULL;
 #endif
 
 struct EmuGlobal *Gbase = NULL;
@@ -39,44 +43,28 @@ void bot_update()
 	}
 }
 
-// FIXME make + use generic API
-uint8_t input_fetch(struct EmuGlobal *globals, void *state, uint64_t timestamp, int port)
+void input_fetch(struct EmuGlobal *G, void *state, uint64_t timestamp)
 {
-	//struct SMSGlobal *G = (struct SMSGlobal *)globals;
-	struct SMS *sms = (struct SMS *)state;
 #ifndef DEDI
+	int i;
+	struct SMS *sms = (struct SMS *)state;
+	SDL_Event ev;
+
 	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
 
-	SDL_Event ev;
 	if(!sms->no_draw) {
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
 			case SDL_KEYDOWN:
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] &= ~0x01; break;
-					case SDLK_s: sms->joy[0] &= ~0x02; break;
-					case SDLK_a: sms->joy[0] &= ~0x04; break;
-					case SDLK_d: sms->joy[0] &= ~0x08; break;
-					case SDLK_KP_2: sms->joy[0] &= ~0x10; break;
-					case SDLK_KP_3: sms->joy[0] &= ~0x20; break;
-					default:
-						break;
-				} break;
-
+				for (i = 0; i < G->input_button_count; i++)
+					if (ev.key.keysym.sym == keymap[i])
+						lemu_handle_input(G, state, 0, i, true);
+				break;
 			case SDL_KEYUP:
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] |= 0x01; break;
-					case SDLK_s: sms->joy[0] |= 0x02; break;
-					case SDLK_a: sms->joy[0] |= 0x04; break;
-					case SDLK_d: sms->joy[0] |= 0x08; break;
-					case SDLK_KP_2: sms->joy[0] |= 0x10; break;
-					case SDLK_KP_3: sms->joy[0] |= 0x20; break;
-					default:
-						break;
-				} break;
-
+				for (i = 0; i < G->input_button_count; i++)
+					if (ev.key.keysym.sym == keymap[i])
+						lemu_handle_input(G, state, 0, i, false);
+				break;
 			case SDL_QUIT:
 				exit(0);
 				break;
@@ -86,14 +74,12 @@ uint8_t input_fetch(struct EmuGlobal *globals, void *state, uint64_t timestamp, 
 	}
 	}
 #endif
-	//printf("OUTPUT: %02X\n", sms->joy[port&1]);
-	return sms->joy[port&1];
 }
 
 #ifndef DEDI
 void audio_callback_sdl(void *ud, Uint8 *stream, int len)
 {
-	psg_pop_16bit_mono((int16_t *)stream, len/2);
+	lemu_audio_callback(Gbase, Gbase->current_state, stream, len);
 }
 #endif
 
@@ -139,23 +125,29 @@ int main(int argc, char *argv[])
 	snprintf(window_title_buf, sizeof(window_title_buf)-1,
 		"little-emu - core: %s", Gbase->core_name);
 	window_title_buf[255] = '\x00';
+
+	// Set up video
+	Gsurface = lemu_surface_new(Gbase);
+
 	window = SDL_CreateWindow(window_title_buf,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		342*2,
-		SCANLINES*2,
+		Gsurface->width * 2,
+		Gsurface->height * 2,
 		0);
 	renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(window));
+
 	texture = SDL_CreateTexture(renderer,
-		SDL_PIXELFORMAT_BGRX8888,
+		SDL_PIXELFORMAT_BGRX8888, // TODO: more pixel formats
 		SDL_TEXTUREACCESS_STREAMING,
-		342, SCANLINES);
+		Gsurface->width, Gsurface->height);
 
 	// Tell SDL to get stuffed
 	signal(SIGINT,  SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
 
 	// Set up audio
+	// TODO: Add audio format negotiation?
 	SDL_AudioSpec au_want;
 	au_want.freq = 48000;
 	au_want.format = AUDIO_S16;
@@ -178,8 +170,7 @@ int main(int argc, char *argv[])
 		// FIXME make + use generic API
 		struct SMS *sms = (struct SMS *)Gbase->current_state;
 		struct SMS sms_ndsim;
-		sms->joy[0] = botlib_hook_input(Gbase, sms, sms->timestamp, 0);
-		sms->joy[1] = botlib_hook_input(Gbase, sms, sms->timestamp, 1);
+		botlib_hook_input(Gbase, sms, sms->timestamp);
 		bot_update();
 		lemu_copy(Gbase, &sms_ndsim, sms);
 		lemu_run_frame(Gbase, sms, false);
@@ -204,20 +195,8 @@ int main(int argc, char *argv[])
 		if(!sms->no_draw)
 		{
 			// Draw + upscale
-			void *pixels = NULL;
-			int pitch = 0;
-			SDL_LockTexture(texture, NULL, &pixels, &pitch);
-			for(int y = 0; y < SCANLINES; y++) {
-				uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
-				for(int x = 0; x < 342; x++) {
-					// FIXME make API then use it
-					uint32_t v = ((struct SMSGlobal *)Gbase)->frame_data[y][x];
-					uint32_t r = ((v>>0)&3)*0x55;
-					uint32_t g = ((v>>2)&3)*0x55;
-					uint32_t b = ((v>>4)&3)*0x55;
-					pp[x] = (b<<24)|(g<<16)|(r<<8);
-				}
-			}
+			SDL_LockTexture(texture, NULL, &(Gsurface->pixels), &(Gsurface->pitch));
+			lemu_video_callback(Gbase, Gsurface);
 			SDL_UnlockTexture(texture);
 			SDL_RenderCopy(renderer, texture, NULL, NULL);
 
@@ -226,6 +205,11 @@ int main(int argc, char *argv[])
 		}
 #endif
 	}
+
+#ifndef DEDI
+	lemu_surface_free(Gsurface);
+#endif
+	lemu_global_free(Gbase);
 	
 	return 0;
 }

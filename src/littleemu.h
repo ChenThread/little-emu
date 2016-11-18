@@ -33,6 +33,7 @@ struct EmuGlobal {
 	size_t chicken_pointer_count;
 	void **chicken_pointers;
 
+	size_t input_button_count;
 	size_t player_count;
 
 	// Common data
@@ -43,6 +44,16 @@ struct EmuGlobal {
 	uint8_t extra_data[];
 };
 
+enum EmuSurfaceFormat {
+	EMU_SURFACE_FORMAT_BGRA_32
+};
+
+struct EmuSurface {
+	int width, height, pitch;
+	enum EmuSurfaceFormat format;
+	void* pixels;
+};
+
 // core.c
 uint64_t time_now(void);
 struct EmuGlobal *lemu_global_new(const char *fname, const void *data, size_t len);
@@ -50,4 +61,9 @@ void lemu_global_free(struct EmuGlobal *G);
 void lemu_state_init(struct EmuGlobal *G, void *state);
 void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
 void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
+void lemu_handle_input(struct EmuGlobal *G, void *state, int player_id, int input_id, bool down);
 
+struct EmuSurface *lemu_surface_new(struct EmuGlobal *G);
+void lemu_surface_free(struct EmuSurface* surface);
+void lemu_video_callback(struct EmuGlobal *G, struct EmuSurface *S);
+void lemu_audio_callback(struct EmuGlobal *G, void *state, uint8_t *stream, int len);

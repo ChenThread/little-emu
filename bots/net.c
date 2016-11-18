@@ -41,6 +41,9 @@ static int32_t player_cli[PLAYER_MAX] = {-1, -1};
 static uint32_t player_frame_idx[PLAYER_MAX];
 const uint32_t initial_backlog = 0;
 #else
+// TODO: unhardcode
+static SDL_Keycode keymap[] = {SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_KP_2, SDLK_KP_3};
+
 static struct sockaddr *serv_addr;
 static socklen_t serv_addrlen;
 static uint64_t serv_keepalive_recv;
@@ -117,70 +120,40 @@ static void kick_client(const char *reason, int cidx, void *maddr, socklen_t mad
 }
 #endif
 
-uint8_t bot_hook_input(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port)
+void bot_hook_input(struct EmuGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
 #ifndef SERVER
+	int i;
 	SDL_Event ev;
+
 	if(!sms->no_draw) {
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
 			case SDL_KEYDOWN:
 				if((player_control&1) != 0) {
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] &= ~0x01; break;
-					case SDLK_s: sms->joy[0] &= ~0x02; break;
-					case SDLK_a: sms->joy[0] &= ~0x04; break;
-					case SDLK_d: sms->joy[0] &= ~0x08; break;
-					case SDLK_KP_2: sms->joy[0] &= ~0x10; break;
-					case SDLK_KP_3: sms->joy[0] &= ~0x20; break;
-					default:
-						break;
-				}
+					for (i = 0; i < G->input_button_count; i++)
+						if (ev.key.keysym.sym == keymap[i])
+							lemu_handle_input(G, sms, 0, i, true);
 				}
 
 				if((player_control&2) != 0) {
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] &= ~0x40; break;
-					case SDLK_s: sms->joy[0] &= ~0x80; break;
-					case SDLK_a: sms->joy[1] &= ~0x01; break;
-					case SDLK_d: sms->joy[1] &= ~0x02; break;
-					case SDLK_KP_2: sms->joy[1] &= ~0x04; break;
-					case SDLK_KP_3: sms->joy[1] &= ~0x08; break;
-					default:
-						break;
-				}
+					for (i = 0; i < G->input_button_count; i++)
+						if (ev.key.keysym.sym == keymap[i])
+							lemu_handle_input(G, sms, 1, i, true);
 				}
 				break;
 
 			case SDL_KEYUP:
 				if((player_control&1) != 0) {
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] |= 0x01; break;
-					case SDLK_s: sms->joy[0] |= 0x02; break;
-					case SDLK_a: sms->joy[0] |= 0x04; break;
-					case SDLK_d: sms->joy[0] |= 0x08; break;
-					case SDLK_KP_2: sms->joy[0] |= 0x10; break;
-					case SDLK_KP_3: sms->joy[0] |= 0x20; break;
-					default:
-						break;
-				}
+					for (i = 0; i < G->input_button_count; i++)
+						if (ev.key.keysym.sym == keymap[i])
+							lemu_handle_input(G, sms, 0, i, false);
 				}
 
 				if((player_control&2) != 0) {
-				switch(ev.key.keysym.sym)
-				{
-					case SDLK_w: sms->joy[0] |= 0x40; break;
-					case SDLK_s: sms->joy[0] |= 0x80; break;
-					case SDLK_a: sms->joy[1] |= 0x01; break;
-					case SDLK_d: sms->joy[1] |= 0x02; break;
-					case SDLK_KP_2: sms->joy[1] |= 0x04; break;
-					case SDLK_KP_3: sms->joy[1] |= 0x08; break;
-					default:
-						break;
-				}
+					for (i = 0; i < G->input_button_count; i++)
+						if (ev.key.keysym.sym == keymap[i])
+							lemu_handle_input(G, sms, 1, i, false);
 				}
 				break;
 
@@ -193,8 +166,6 @@ uint8_t bot_hook_input(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp,
 	}
 	}
 #endif
-
-	return sms->joy[port&1];
 }
 
 void bot_update(struct SMSGlobal *G)
