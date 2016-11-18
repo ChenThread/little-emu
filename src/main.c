@@ -1,9 +1,9 @@
 #include "common.h"
 
 void *botlib = NULL;
-void (*botlib_init)(int argc, char *argv[]) = NULL;
-void (*botlib_update)(void) = NULL;
-uint8_t (*botlib_hook_input)(struct SMS *sms, uint64_t timestamp, int port) = NULL;
+void (*botlib_init)(struct SMSGlobal *G, int argc, char *argv[]) = NULL;
+void (*botlib_update)(struct SMSGlobal *G) = NULL;
+uint8_t (*botlib_hook_input)(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port) = NULL;
 
 #ifndef DEDI
 SDL_Window *window = NULL;
@@ -11,14 +11,16 @@ SDL_Renderer *renderer = NULL;
 SDL_Texture *texture = NULL;
 #endif
 
+struct SMSGlobal Gsms;
+
 void bot_update()
 {
 	if(botlib_update != NULL) {
-		botlib_update();
+		botlib_update(&Gsms);
 	}
 }
 
-uint8_t input_fetch(struct SMS *sms, uint64_t timestamp, int port)
+uint8_t input_fetch(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port)
 {
 #ifndef DEDI
 	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
@@ -78,8 +80,8 @@ int main(int argc, char *argv[])
 	assert(argc > 1);
 	FILE *fp = fopen(argv[1], "rb");
 	assert(fp != NULL);
-	memset(sms_rom, 0xFF, sizeof(sms_rom));
-	int rsiz = fread(sms_rom, 1, sizeof(sms_rom), fp);
+	memset(Gsms.rom, 0xFF, sizeof(Gsms.rom));
+	int rsiz = fread(Gsms.rom, 1, sizeof(Gsms.rom), fp);
 	assert(rsiz > 0);
 
 	// Load bot if available
@@ -103,47 +105,47 @@ int main(int argc, char *argv[])
 		botlib_hook_input = input_fetch;
 	}
 
-	sms_rom_is_banked = false;
+	Gsms.rom_is_banked = false;
 
 	// Check if this is an SGC file
-	if(!memcmp(sms_rom, "SGC\x1A", 4)) {
+	if(!memcmp(Gsms.rom, "SGC\x1A", 4)) {
 		// It is - read header
 		printf("SGC file detected - creating player\n");
-		assert(sms_rom[0x04] == 0x01);
+		assert(Gsms.rom[0x04] == 0x01);
 		// ignore PAL/NTSC flag
 		// ignore scanline flag
 		// ignore reserved byte
 
-		uint8_t load_lo = sms_rom[0x08];
-		uint8_t load_hi = sms_rom[0x09];
-		uint8_t init_lo = sms_rom[0x0A];
-		uint8_t init_hi = sms_rom[0x0B];
-		uint8_t play_lo = sms_rom[0x0C];
-		uint8_t play_hi = sms_rom[0x0D];
-		uint8_t sp_lo = sms_rom[0x0E];
-		uint8_t sp_hi = sms_rom[0x0F];
+		uint8_t load_lo = Gsms.rom[0x08];
+		uint8_t load_hi = Gsms.rom[0x09];
+		uint8_t init_lo = Gsms.rom[0x0A];
+		uint8_t init_hi = Gsms.rom[0x0B];
+		uint8_t play_lo = Gsms.rom[0x0C];
+		uint8_t play_hi = Gsms.rom[0x0D];
+		uint8_t sp_lo = Gsms.rom[0x0E];
+		uint8_t sp_hi = Gsms.rom[0x0F];
 
 		uint8_t rst_ptrs[8][2]; // first is ignored.
-		memcpy(rst_ptrs[0], sms_rom+0x10, 16);
+		memcpy(rst_ptrs[0], Gsms.rom+0x10, 16);
 		uint8_t mapper_init_vals[4];
-		memcpy(mapper_init_vals, sms_rom+0x20, 4);
-		uint8_t song_beg = sms_rom[0x24];
-		uint8_t song_total = sms_rom[0x25];
-		//uint8_t sfx_beg = sms_rom[0x26];
-		//uint8_t sfx_end = sms_rom[0x27];
+		memcpy(mapper_init_vals, Gsms.rom+0x20, 4);
+		uint8_t song_beg = Gsms.rom[0x24];
+		uint8_t song_total = Gsms.rom[0x25];
+		//uint8_t sfx_beg = Gsms.rom[0x26];
+		//uint8_t sfx_end = Gsms.rom[0x27];
 
-		uint8_t sgc_sys_type = sms_rom[0x28];
+		uint8_t sgc_sys_type = Gsms.rom[0x28];
 		assert(sgc_sys_type == 0x00 || sgc_sys_type == 0x01); // SMS/GG ONLY!
 
 		// Load
 		size_t load_addr = ((size_t)load_lo)+(((size_t)load_hi)<<8);
 		printf("Load address: %04X\n", (unsigned int)load_addr);
 		assert(load_addr >= 0x00400);
-		assert(load_addr < sizeof(sms_rom));
-		assert(load_addr+rsiz-0xA0 <= sizeof(sms_rom));
-		memmove(&sms_rom[load_addr], &sms_rom[0xA0], rsiz-0xA0);
-		memset(sms_rom, 0x00, load_addr);
-		memset(sms_rom+load_addr+(rsiz-0xA0), 0x00, sizeof(sms_rom)-(load_addr+(rsiz-0xA0)));
+		assert(load_addr < sizeof(Gsms.rom));
+		assert(load_addr+rsiz-0xA0 <= sizeof(Gsms.rom));
+		memmove(&Gsms.rom[load_addr], &Gsms.rom[0xA0], rsiz-0xA0);
+		memset(Gsms.rom, 0x00, load_addr);
+		memset(Gsms.rom+load_addr+(rsiz-0xA0), 0x00, sizeof(Gsms.rom)-(load_addr+(rsiz-0xA0)));
 		rsiz -= 0xA0;
 		rsiz += load_addr;
 
@@ -157,15 +159,15 @@ int main(int argc, char *argv[])
 			0x06, song_beg, // LD B, $nn
 			0xC3, 0x80, 0x00, // JP $0080
 		};
-		memcpy(&sms_rom[0x0000], loader_stub_init, sizeof(loader_stub_init));
+		memcpy(&Gsms.rom[0x0000], loader_stub_init, sizeof(loader_stub_init));
 		// XXX: currently not supporting RST $38
 		for(int i = 1; i < 7; i++) {
-			sms_rom[i*8+0x00] = 0xC3; // JP $nnnn
-			sms_rom[i*8+0x01] = rst_ptrs[i][0];
-			sms_rom[i*8+0x02] = rst_ptrs[i][1];
+			Gsms.rom[i*8+0x00] = 0xC3; // JP $nnnn
+			Gsms.rom[i*8+0x01] = rst_ptrs[i][0];
+			Gsms.rom[i*8+0x02] = rst_ptrs[i][1];
 		}
 		// TODO: make NMI do something
-		sms_rom[0x0066] = 0xED; sms_rom[0x0067] = 0x45; // RETN
+		Gsms.rom[0x0066] = 0xED; Gsms.rom[0x0067] = 0x45; // RETN
 
 		// Interrupt handler
 		uint8_t loader_stub_irq[] = {
@@ -186,7 +188,7 @@ int main(int argc, char *argv[])
 			//0xFB, // EI
 			0xED, 0x4D, // RETI
 		};
-		memcpy(&sms_rom[0x0038], loader_stub_irq, sizeof(loader_stub_irq));
+		memcpy(&Gsms.rom[0x0038], loader_stub_irq, sizeof(loader_stub_irq));
 
 		// Init sequence
 		// TODO: clear RAM
@@ -272,14 +274,14 @@ int main(int argc, char *argv[])
 
 			0xC3, 0x00, 0x02, // JP $0200
 		};
-		memcpy(&sms_rom[0x0080], loader_stub_maininit, sizeof(loader_stub_maininit));
-		memcpy(&sms_rom[0x0200], loader_stub_loop, sizeof(loader_stub_loop));
-		sms_rom[0x007C] = song_beg;
-		sms_rom[0x007D] = 0xFF;
-		sms_rom[0x007E] = song_beg;
-		sms_rom[0x007F] = song_beg+song_total-1;
+		memcpy(&Gsms.rom[0x0080], loader_stub_maininit, sizeof(loader_stub_maininit));
+		memcpy(&Gsms.rom[0x0200], loader_stub_loop, sizeof(loader_stub_loop));
+		Gsms.rom[0x007C] = song_beg;
+		Gsms.rom[0x007D] = 0xFF;
+		Gsms.rom[0x007E] = song_beg;
+		Gsms.rom[0x007F] = song_beg+song_total-1;
 
-		sms_rom_is_banked = true;
+		Gsms.rom_is_banked = true;
 	}
 
 	// TODO: handle other sizes
@@ -287,35 +289,35 @@ int main(int argc, char *argv[])
 	if(rsiz <= 48*1024) {
 		// Unbanked
 		printf("Fill unbanked\n");
-		//memset(&sms_rom[rsiz], 0xFF, sizeof(sms_rom)-rsiz);
+		//memset(&Gsms.rom[rsiz], 0xFF, sizeof(Gsms.rom)-rsiz);
 
 	} else {
 		// Banked
-		sms_rom_is_banked = true;
+		Gsms.rom_is_banked = true;
 		if(rsiz <= 128*1024) {
 			printf("Copy 128KB -> 256KB\n");
-			memcpy(&sms_rom[128*1024], sms_rom, 128*1024);
+			memcpy(&Gsms.rom[128*1024], Gsms.rom, 128*1024);
 		}
 		if(rsiz <= 256*1024) {
 			printf("Copy 256KB -> 512KB\n");
-			memcpy(&sms_rom[256*1024], sms_rom, 256*1024);
+			memcpy(&Gsms.rom[256*1024], Gsms.rom, 256*1024);
 		}
 		if(rsiz <= 512*1024) {
 			printf("Copy 512KB -> 1MB\n");
-			memcpy(&sms_rom[512*1024], sms_rom, 512*1024);
+			memcpy(&Gsms.rom[512*1024], Gsms.rom, 512*1024);
 		}
 		if(rsiz <= 1*1024*1024) {
 			printf("Copy 1MB -> 2MB\n");
-			memcpy(&sms_rom[1*1024*1024], sms_rom, 1*1024*1024);
+			memcpy(&Gsms.rom[1*1024*1024], Gsms.rom, 1*1024*1024);
 		}
 		if(rsiz <= 2*1024*1024) {
 			printf("Copy 2MB -> 4MB\n");
-			memcpy(&sms_rom[2*1024*1024], sms_rom, 2*1024*1024);
+			memcpy(&Gsms.rom[2*1024*1024], Gsms.rom, 2*1024*1024);
 		}
 	}
 
 	// Set up SMS
-	sms_init(&sms_current);
+	sms_init(&Gsms, &Gsms.current);
 
 #ifndef DEDI
 	// Set up SDL
@@ -347,23 +349,23 @@ int main(int argc, char *argv[])
 #endif
 
 	// Run
-	sms_current.ram[0] = 0xAB;
+	Gsms.current.ram[0] = 0xAB;
 	if(botlib_init != NULL) {
-		botlib_init(argc-2, argv+2);
+		botlib_init(&Gsms, argc-2, argv+2);
 	}
 
 #ifndef DEDI
 	SDL_PauseAudio(0);
 #endif
-	twait = time_now();
+	Gsms.twait = time_now();
 	for(;;) {
-		struct SMS *sms = &sms_current;
+		struct SMS *sms = &Gsms.current;
 		struct SMS sms_ndsim;
-		sms->joy[0] = botlib_hook_input(sms, sms->timestamp, 0);
-		sms->joy[1] = botlib_hook_input(sms, sms->timestamp, 1);
+		sms->joy[0] = botlib_hook_input(&Gsms, sms, sms->timestamp, 0);
+		sms->joy[1] = botlib_hook_input(&Gsms, sms, sms->timestamp, 1);
 		bot_update();
 		sms_copy(&sms_ndsim, sms);
-		sms_run_frame(sms);
+		sms_run_frame(&Gsms, sms);
 		/*
 		sms_ndsim.no_draw = true;
 		sms_run_frame(&sms_ndsim);
@@ -372,12 +374,12 @@ int main(int argc, char *argv[])
 		*/
 
 		uint64_t tnow = time_now();
-		twait += FRAME_WAIT;
+		Gsms.twait += FRAME_WAIT;
 		if(sms->no_draw) {
-			twait = tnow;
+			Gsms.twait = tnow;
 		} else {
-			if(TIME_IN_ORDER(tnow, twait)) {
-				usleep((useconds_t)(twait-tnow));
+			if(TIME_IN_ORDER(tnow, Gsms.twait)) {
+				usleep((useconds_t)(Gsms.twait-tnow));
 			}
 		}
 
@@ -391,7 +393,7 @@ int main(int argc, char *argv[])
 			for(int y = 0; y < SCANLINES; y++) {
 				uint32_t *pp = (uint32_t *)(((uint8_t *)pixels) + pitch*y);
 				for(int x = 0; x < 342; x++) {
-					uint32_t v = frame_data[y][x];
+					uint32_t v = Gsms.frame_data[y][x];
 					uint32_t r = ((v>>0)&3)*0x55;
 					uint32_t g = ((v>>2)&3)*0x55;
 					uint32_t b = ((v>>4)&3)*0x55;

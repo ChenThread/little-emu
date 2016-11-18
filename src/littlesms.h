@@ -82,9 +82,6 @@ struct VDP
 	uint64_t timestamp_end;
 } __attribute__((__packed__));
 
-// Electrical state
-int32_t outhpf_charge;
-
 struct PSG
 {
 	// PSG state
@@ -120,42 +117,54 @@ struct SMS
 	uint64_t timestamp_end;
 } __attribute__((__packed__));
 
-extern uint8_t sms_rom[4*1024*1024];
-extern bool sms_rom_is_banked;
+struct SMSGlobal
+{
+	struct SMS current;
+
+	// SMS
+	uint8_t rom[4*1024*1024];
+	uint64_t twait;
+	bool rom_is_banked;
+
+	// VDP
+	uint8_t frame_data[SCANLINES][342];
+
+	// PSG
+	int32_t outhpf_charge;
+} __attribute__((__packed__));
+
 
 // psg.c
 void psg_pop_16bit_mono(int16_t *buf, size_t len);
-void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp);
-void psg_init(struct PSG *psg);
-void psg_write(struct PSG *psg, struct SMS *sms, uint64_t timestamp, uint8_t val);
+void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+void psg_init(struct SMSGlobal *G, struct PSG *psg);
+void psg_write(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
 
 // sms.c
-void sms_init(struct SMS *sms);
+void sms_init(struct SMSGlobal *G, struct SMS *sms);
 void sms_copy(struct SMS *dest, struct SMS *src);
-void sms_run(struct SMS *sms, uint64_t timestamp);
-void sms_run_frame(struct SMS *sms);
+void sms_run(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+void sms_run_frame(struct SMSGlobal *G, struct SMS *sms);
 
 // vdp.c
-extern uint8_t frame_data[SCANLINES][342];
-uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
-uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
-void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val);
-void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val);
-void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
-void vdp_init(struct VDP *vdp);
-void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp);
+uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+uint8_t vdp_read_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
+void vdp_write_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val);
+void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+void vdp_init(struct SMSGlobal *G, struct VDP *vdp);
+void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
 
 // z80.c
 void z80_reset(struct Z80 *z80);
-void z80_init(struct Z80 *z80);
-void z80_irq(struct Z80 *z80, struct SMS *sms, uint8_t dat);
-void z80_nmi(struct Z80 *z80, struct SMS *sms);
-void z80_run(struct Z80 *z80, struct SMS *sms, uint64_t timestamp);
-extern void (*sms_hook_poll_input)(struct SMS *sms, int controller, uint64_t timestamp);
+void z80_init(struct SMSGlobal *G, struct Z80 *z80);
+void z80_irq(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint8_t dat);
+void z80_nmi(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms);
+void z80_run(struct Z80 *z80, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp);
+extern void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp);
 
 // main.c
-extern struct SMS sms_current;
-extern uint64_t twait;
+extern struct SMSGlobal Gsms;
 uint64_t time_now(void);
 
 

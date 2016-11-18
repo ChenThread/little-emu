@@ -17,7 +17,7 @@ struct SMS backlog1[BACKLOG1_CAP];
 uint8_t input_log[INPUT_CAP][2];
 int backlog_idx = 0;
 
-static void drop_frame(void)
+static void drop_frame(struct SMSGlobal *G)
 {
 	// Rewind one frame
 	int i0 = backlog_idx/BACKLOG0_CAP;
@@ -45,7 +45,7 @@ static void drop_frame(void)
 				, backlog0[i].joy[1]
 				);
 			*/
-			sms_run_frame(&backlog0[i]);
+			sms_run_frame(G, &backlog0[i]);
 			backlog0[i].no_draw = false;
 			backlog0[i].joy[0] = input_log[i+b1][0];
 			backlog0[i].joy[1] = input_log[i+b1][1];
@@ -53,29 +53,29 @@ static void drop_frame(void)
 	}
 
 	// Copy state
-	sms_copy(&sms_current, &backlog0[backlog_idx % BACKLOG0_CAP]);
+	sms_copy(&G->current, &backlog0[backlog_idx % BACKLOG0_CAP]);
 }
 
-static void save_frame(void)
+static void save_frame(struct SMSGlobal *G)
 {
-	sms_copy(&backlog0[backlog_idx % BACKLOG0_CAP], &sms_current);
+	sms_copy(&backlog0[backlog_idx % BACKLOG0_CAP], &G->current);
 	if((backlog_idx % BACKLOG0_CAP) == 0) {
-		sms_copy(&backlog1[backlog_idx / BACKLOG0_CAP], &sms_current);
+		sms_copy(&backlog1[backlog_idx / BACKLOG0_CAP], &G->current);
 	}
 	backlog_idx++;
 }
 
-void bot_update()
+void bot_update(struct SMSGlobal *G)
 {
 	bool shift_left = (SDL_GetModState() & KMOD_LSHIFT);
 
-	uint8_t frame_j0 = sms_current.joy[0];
-	uint8_t frame_j1 = sms_current.joy[1];
+	uint8_t frame_j0 = G->current.joy[0];
+	uint8_t frame_j1 = G->current.joy[1];
 
 	if(shift_left && backlog_idx > 0) {
-		drop_frame();
+		drop_frame(G);
 		if(backlog_idx > 0) {
-			drop_frame();
+			drop_frame(G);
 		}
 	}
 
@@ -83,10 +83,10 @@ void bot_update()
 	assert(backlog_idx < INPUT_CAP);
 	input_log[backlog_idx][0] = frame_j0;
 	input_log[backlog_idx][1] = frame_j1;
-	sms_current.joy[0] = frame_j0;
-	sms_current.joy[1] = frame_j1;
-	//printf("STATE %9d %016llX\n", backlog_idx, (unsigned long long)(sms_current.timestamp));
-	save_frame();
+	G->current.joy[0] = frame_j0;
+	G->current.joy[1] = frame_j1;
+	//printf("STATE %9d %016llX\n", backlog_idx, (unsigned long long)(G->current.timestamp));
+	save_frame(G);
 
 	//twait = time_now()-20000;
 }

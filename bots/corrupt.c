@@ -27,6 +27,7 @@ static uint32_t corruption_log[INPUT_CAP];
 
 FILE *fp_random = NULL;
 
+// TODO replace this with a seeded RNG
 static uint32_t get_random(void)
 {
 	uint32_t ret;
@@ -34,7 +35,7 @@ static uint32_t get_random(void)
 	return ret;
 }
 
-static void drop_frame(void)
+static void drop_frame(struct SMSGlobal *G)
 {
 	// Rewind one frame
 	int i0 = backlog_idx/BACKLOG0_CAP;
@@ -49,7 +50,7 @@ static void drop_frame(void)
 	int c = corruption_log[backlog_idx];
 	if(c >= 0) {
 		if((rom_corruption_mask[c>>3]&(1<<(c&7))) != 0) {
-			sms_rom[c>>3] ^= (1<<(c&7));
+			G->rom[c>>3] ^= (1<<(c&7));
 			rom_main[c>>3] ^= (1<<(c&7));
 			rom_corruption_mask[c>>3] ^= (1<<(c&7));
 		}
@@ -72,7 +73,7 @@ static void drop_frame(void)
 				, backlog0[i].joy[1]
 				);
 			*/
-			sms_run_frame(&backlog0[i]);
+			sms_run_frame(G, &backlog0[i]);
 			backlog0[i].no_draw = false;
 			backlog0[i].joy[0] = input_log[i+b1][0];
 			backlog0[i].joy[1] = input_log[i+b1][1];
@@ -80,20 +81,20 @@ static void drop_frame(void)
 	}
 
 	// Copy state
-	sms_copy(&sms_current, &backlog0[backlog_idx % BACKLOG0_CAP]);
+	sms_copy(&G->current, &backlog0[backlog_idx % BACKLOG0_CAP]);
 }
 
-static void save_frame(void)
+static void save_frame(struct SMSGlobal *G)
 {
-	sms_copy(&backlog0[backlog_idx % BACKLOG0_CAP], &sms_current);
+	sms_copy(&backlog0[backlog_idx % BACKLOG0_CAP], &G->current);
 	if((backlog_idx % BACKLOG0_CAP) == 0) {
-		sms_copy(&backlog1[backlog_idx / BACKLOG0_CAP], &sms_current);
+		sms_copy(&backlog1[backlog_idx / BACKLOG0_CAP], &G->current);
 	}
 
 	// Apply corruption
 	int c = get_random() & (rom_size*8-1);
 	if(get_random()%100 < 50 && (rom_protection_mask[c>>3] & (1<<(c&7))) == 0) {
-		sms_rom[c>>3] ^= (1<<(c&7));
+		G->rom[c>>3] ^= (1<<(c&7));
 		rom_main[c>>3] ^= (1<<(c&7));
 		rom_corruption_mask[c>>3] |= (1<<(c&7));
 		rom_protection_mask[c>>3] |= (1<<(c&7));
@@ -105,17 +106,17 @@ static void save_frame(void)
 	backlog_idx++;
 }
 
-void bot_update()
+void bot_update(struct SMSGlobal *G)
 {
 	bool shift_left = (SDL_GetModState() & KMOD_LSHIFT);
 
-	uint8_t frame_j0 = sms_current.joy[0];
-	uint8_t frame_j1 = sms_current.joy[1];
+	uint8_t frame_j0 = G->current.joy[0];
+	uint8_t frame_j1 = G->current.joy[1];
 
 	if(shift_left && backlog_idx > 0) {
-		drop_frame();
+		drop_frame(G);
 		if(backlog_idx > 0) {
-			drop_frame();
+			drop_frame(G);
 		}
 	}
 
@@ -123,21 +124,21 @@ void bot_update()
 	assert(backlog_idx < INPUT_CAP);
 	input_log[backlog_idx][0] = frame_j0;
 	input_log[backlog_idx][1] = frame_j1;
-	sms_current.joy[0] = frame_j0;
-	sms_current.joy[1] = frame_j1;
-	//printf("STATE %9d %016llX\n", backlog_idx, (unsigned long long)(sms_current.timestamp));
-	save_frame();
+	G->current.joy[0] = frame_j0;
+	G->current.joy[1] = frame_j1;
+	//printf("STATE %9d %016llX\n", backlog_idx, (unsigned long long)(G->current.timestamp));
+	save_frame(G);
 
 	struct SMS safe_state;
 	struct SMS broken_state;
-	sms_copy(&safe_state, &sms_current);
-	sms_copy(&broken_state, &sms_current);
+	sms_copy(&safe_state, &G->current);
+	sms_copy(&broken_state, &G->current);
 	safe_state.no_draw = true;
 	broken_state.no_draw = true;
-	memcpy(sms_rom, rom_backup, sizeof(rom_backup));
-	sms_run_frame(&safe_state);
-	memcpy(sms_rom, rom_main, sizeof(rom_main));
-	sms_run_frame(&broken_state);
+	memcpy(G->rom, rom_backup, sizeof(rom_backup));
+	sms_run_frame(G, &safe_state);
+	memcpy(G->rom, rom_main, sizeof(rom_main));
+	sms_run_frame(G, &broken_state);
 	int rdiff = 0;
 	int vdiff = 0;
 	for(int i = 0; i < 8192; i++) {
@@ -170,18 +171,18 @@ void bot_update()
 		uint32_t offs = 0;
 		while(step >= 1) {
 			// Fix first half of slice
-			sms_copy(&broken_state, &sms_current);
-			memcpy(sms_rom, rom_main, sizeof(rom_main));
-			memcpy(sms_rom+offs, rom_backup+offs, step);
-			sms_run_frame(&broken_state);
+			sms_copy(&broken_state, &G->current);
+			memcpy(G->rom, rom_main, sizeof(rom_main));
+			memcpy(G->rom+offs, rom_backup+offs, step);
+			sms_run_frame(G, &broken_state);
 			bool s0_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 			bool s0_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 
 			// Fix second half of slice
-			sms_copy(&broken_state, &sms_current);
-			memcpy(sms_rom, rom_main, sizeof(rom_main));
-			memcpy(sms_rom+offs+step, rom_backup+offs+step, step);
-			sms_run_frame(&broken_state);
+			sms_copy(&broken_state, &G->current);
+			memcpy(G->rom, rom_main, sizeof(rom_main));
+			memcpy(G->rom+offs+step, rom_backup+offs+step, step);
+			sms_run_frame(G, &broken_state);
 			bool s1_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 			bool s1_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 
@@ -194,10 +195,10 @@ void bot_update()
 				{
 					// Fix middle.
 					offs = step/2;
-					sms_copy(&broken_state, &sms_current);
-					memcpy(sms_rom, rom_main, sizeof(rom_main));
-					memcpy(sms_rom+offs+step, rom_backup+offs+step, step);
-					sms_run_frame(&broken_state);
+					sms_copy(&broken_state, &G->current);
+					memcpy(G->rom, rom_main, sizeof(rom_main));
+					memcpy(G->rom+offs+step, rom_backup+offs+step, step);
+					sms_run_frame(G, &broken_state);
 					bool s2_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 					bool s2_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 
@@ -223,7 +224,7 @@ void bot_update()
 		step = (step==0?1:step*2);
 		memcpy(rom_main+offs, rom_backup+offs, step);
 		memset(rom_corruption_mask+offs, 0, step);
-		memcpy(sms_rom, rom_main, sizeof(rom_main));
+		memcpy(G->rom, rom_main, sizeof(rom_main));
 		printf("ROM patched: %08X size %08X\n", offs, step);
 
 	}
@@ -231,10 +232,10 @@ void bot_update()
 	//twait = time_now()-20000;
 }
 
-void bot_init()
+void bot_init(struct SMSGlobal *G)
 {
 	fp_random = fopen("/dev/urandom", "rb");
-	memcpy(rom_backup, sms_rom, sizeof(rom_backup));
-	memcpy(rom_main, sms_rom, sizeof(rom_main));
+	memcpy(rom_backup, G->rom, sizeof(rom_backup));
+	memcpy(rom_main, G->rom, sizeof(rom_main));
 }
 

@@ -66,7 +66,7 @@ const uint8_t player_masks[PLAYER_MAX][2] = {
 
 int player_control = 0;
 int32_t player_id = -2;
-uint32_t sms_rom_crc = 0;
+uint32_t netplay_rom_crc = 0;
 
 static uint32_t crc32_sms_net(uint8_t *data, size_t len, uint32_t crc)
 {
@@ -117,7 +117,7 @@ static void kick_client(const char *reason, int cidx, void *maddr, socklen_t mad
 }
 #endif
 
-uint8_t bot_hook_input(struct SMS *sms, uint64_t timestamp, int port)
+uint8_t bot_hook_input(struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, int port)
 {
 #ifndef SERVER
 	SDL_Event ev;
@@ -197,19 +197,19 @@ uint8_t bot_hook_input(struct SMS *sms, uint64_t timestamp, int port)
 	return sms->joy[port&1];
 }
 
-void bot_update()
+void bot_update(struct SMSGlobal *G)
 {
 	// Save frame input
 #ifndef SERVER
 	if(player_id >= 0) {
-		input_log[BLWRAP(backlog_end)][0] = sms_current.joy[0];
-		input_log[BLWRAP(backlog_end)][1] = sms_current.joy[1];
+		input_log[BLWRAP(backlog_end)][0] = G->current.joy[0];
+		input_log[BLWRAP(backlog_end)][1] = G->current.joy[1];
 	}
 	input_pmask[BLWRAP(backlog_end)] |= player_control;
 #endif
 
 	// Save backlog frame (for sync purposes)
-	sms_copy(&backlog[BLWRAP(backlog_end)], &sms_current);
+	sms_copy(&backlog[BLWRAP(backlog_end)], &G->current);
 
 	// Send input to other clients
 #ifdef SERVER
@@ -747,7 +747,7 @@ void bot_update()
 			// Adjust timer based on delay
 			if(player_id >= 0) {
 				adjx++;
-				twait += (adjx*FRAME_WAIT)/128;
+				G->twait += (adjx*FRAME_WAIT)/128;
 			}
 
 			// Apply + check for diffs
@@ -808,7 +808,7 @@ void bot_update()
 					backlog[idxp].joy[1] = input_log[idxp][1];
 					sms_copy(&backlog[idxn], &backlog[idxp]);
 					backlog[idxn].no_draw = true;
-					sms_run_frame(&backlog[idxn]);
+					sms_run_frame(G, &backlog[idxn]);
 					backlog[idxn].no_draw = false;
 					backlog[idxn].joy[0] = input_log[idxn][0];
 					backlog[idxn].joy[1] = input_log[idxn][1];
@@ -987,7 +987,7 @@ void bot_update()
 		, input_log[idx][1]
 		);
 #endif
-	sms_copy(&sms_current, &backlog[idx]);
+	sms_copy(&G->current, &backlog[idx]);
 	backlog_end++;
 
 #ifndef SERVER
@@ -996,36 +996,36 @@ void bot_update()
 	if(player_id < 0) {
 		//printf("***** SPEC %d\n", backlog_end);
 		if((int32_t)(serv_frame_idx-backlog_end) >= 40) {
-			twait = time_now()-FRAME_WAIT*35;
+			G->twait = time_now()-FRAME_WAIT*35;
 		}
 	}
 
 	// Disable no_draw
-	sms_current.no_draw = false;
+	G->current.no_draw = false;
 #endif
 
 #ifdef SERVER
 
 	// If server... don't wait.
-	twait = time_now()-FRAME_WAIT;
+	G->twait = time_now()-FRAME_WAIT;
 #endif
 }
 
-void bot_init(int argc, char *argv[])
+void bot_init(struct SMSGlobal *G, int argc, char *argv[])
 {
-	sms_current.joy[0] = 0xFF;
-	sms_current.joy[1] = 0xFF;
+	G->current.joy[0] = 0xFF;
+	G->current.joy[1] = 0xFF;
 
 	memset(input_log, 0xFF, sizeof(input_log));
 
-	sms_rom_crc = crc32_sms_net(sms_rom, sizeof(sms_rom), 0);
-	//sms_rom_crc = crc32_sms_net(sms_rom, 512*1024, 0);
+	netplay_rom_crc = crc32_sms_net(G->rom, sizeof(G->rom), 0);
+	//netplay_rom_crc = crc32_sms_net(G->rom, 512*1024, 0);
 
 	net_intro_packet[0] = 0x01;
 	((uint32_t *)(net_intro_packet+1))[0] = (uint32_t)sizeof(struct SMS);
-	((uint32_t *)(net_intro_packet+1))[1] = sms_rom_crc;
+	((uint32_t *)(net_intro_packet+1))[1] = netplay_rom_crc;
 	((uint32_t *)(net_intro_packet+1))[2] = 0
-		| (sms_rom_is_banked ? 0x01 : 0)
+		| (G->rom_is_banked ? 0x01 : 0)
 		| (USE_NTSC ? 0x02 : 0)
 		|0;
 
@@ -1238,7 +1238,7 @@ void bot_init(int argc, char *argv[])
 				printf("Sync packet: frame_idx=%08X, offs=%08X, len=%04X\n"
 					, frame_idx, offs, len);
 				uint8_t *ps = mbuf+11;
-				uint8_t *pd = (uint8_t *)&sms_current;
+				uint8_t *pd = (uint8_t *)&G->current;
 				assert(offs <= sizeof(struct SMS));
 				assert(offs+len <= sizeof(struct SMS));
 				memcpy(pd+offs, ps, len);
@@ -1296,7 +1296,7 @@ void bot_init(int argc, char *argv[])
 	printf("State is now synced. Let's go.\n");
 	serv_keepalive_recv = serv_keepalive_send = time_now();
 #endif
-	printf("ROM CRC: %04X\n", sms_rom_crc);
+	printf("ROM CRC: %04X\n", netplay_rom_crc);
 
 }
 

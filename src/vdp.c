@@ -1,12 +1,11 @@
 #include "common.h"
 
-uint8_t frame_data[SCANLINES][342];
 static const uint64_t HSC_OFFS = (47-17);
 static const uint64_t LINT_OFFS = (47-17);
 static const uint64_t SLATCH_OFFS = (47-15);
 static const uint64_t VINT_OFFS = (47-18);
 
-void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+void vdp_estimate_line_irq(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(vdp->timestamp, sms->z80.timestamp_end)) {
 		return;
@@ -87,7 +86,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	}
 }
 
-static void vdp_do_reg_write(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+static void vdp_do_reg_write(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
@@ -106,10 +105,10 @@ static void vdp_do_reg_write(struct VDP *vdp, struct SMS *sms, uint64_t timestam
 	} else {
 		vdp->irq_mask |=  2;
 	}
-	vdp_estimate_line_irq(vdp, sms, timestamp);
+	vdp_estimate_line_irq(vdp, G, sms, timestamp);
 }
 
-void vdp_init(struct VDP *vdp)
+void vdp_init(struct SMSGlobal *G, struct VDP *vdp)
 {
 	*vdp = (struct VDP){ .timestamp=0 };
 	vdp->ctrl_addr = 0xBF00;
@@ -131,7 +130,7 @@ void vdp_init(struct VDP *vdp)
 	vdp->irq_out = 0;
 }
 
-void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
 	timestamp &= ~1;
 	if(!TIME_IN_ORDER(vdp->timestamp, timestamp)) {
@@ -385,13 +384,13 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = 0x00;
+					G->frame_data[vctr][hctr] = 0x00;
 				}
 			} else {
 				assert(vctr >= 0 && vctr < SCANLINES);
 				for(int hctr = hbeg; hctr < hend; hctr++) {
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = (
+					G->frame_data[vctr][hctr] = (
 						hctr >= 47-13 && hctr < 47+256+15
 						? bcol
 						: 0x00);
@@ -496,11 +495,11 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 						v |= pal;
 					}
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = sms->cram[v&0x1F];
-					//frame_data[vctr][hctr] = v&0x1F;
+					G->frame_data[vctr][hctr] = sms->cram[v&0x1F];
+					//G->frame_data[vctr][hctr] = v&0x1F;
 				} else {
 					assert(hctr >= 0 && hctr < 342);
-					frame_data[vctr][hctr] = (
+					G->frame_data[vctr][hctr] = (
 						hctr >= 47-13 && hctr < 47+256+15
 						? bcol
 						: 0x00);
@@ -522,9 +521,9 @@ void vdp_run(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	vdp->timestamp = vdp->timestamp_end;
 }
 
-uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
-	vdp_run(vdp, sms, timestamp);
+	vdp_run(vdp, G, sms, timestamp);
 	vdp->ctrl_latch = 0;
 	vdp->irq_out &= ~3;
 	uint8_t ret = vdp->status;
@@ -532,9 +531,9 @@ uint8_t vdp_read_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	return ret;
 }
 
-uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
+uint8_t vdp_read_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
-	vdp_run(vdp, sms, timestamp);
+	vdp_run(vdp, G, sms, timestamp);
 	vdp->ctrl_latch = 0;
 	uint8_t ret = vdp->read_buf;
 	vdp->read_buf = sms->vram[vdp->ctrl_addr&0x3FFF];
@@ -544,9 +543,9 @@ uint8_t vdp_read_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp)
 	return ret;
 }
 
-void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void vdp_write_ctrl(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, sms, timestamp);
+	vdp_run(vdp, G, sms, timestamp);
 	if(vdp->ctrl_latch == 0) {
 		vdp->ctrl_addr &= ~0x00FF;
 		vdp->ctrl_addr |= ((uint16_t)val)<<0;
@@ -566,7 +565,7 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 			case 1: // Write
 				break;
 			case 2: // Register
-				vdp_do_reg_write(vdp, sms, timestamp);
+				vdp_do_reg_write(vdp, G, sms, timestamp);
 				break;
 			case 3: // CRAM
 				break;
@@ -577,9 +576,9 @@ void vdp_write_ctrl(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_
 	//printf("VDP CTRL %02X\n", val);
 }
 
-void vdp_write_data(struct VDP *vdp, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void vdp_write_data(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, sms, timestamp);
+	vdp_run(vdp, G, sms, timestamp);
 	//if(vdp->ctrl_latch != 0) { printf("VDP DLWR %04X %02X\n", vdp->ctrl_addr, val); }
 	vdp->ctrl_latch = 0;
 	if(vdp->ctrl_addr >= 0xC000) {

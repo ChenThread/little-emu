@@ -1,4 +1,5 @@
 #include "common.h"
+// XXX: do we move this to SMSGlobal?
 #ifndef DEDI
 int16_t sound_data[PSG_OUT_BUF_LEN];
 static size_t sound_data_out_offs;
@@ -14,7 +15,6 @@ static uint16_t psg_volumes[16] = {
 };
 static uint8_t lfsr_noise_sequence[65536];
 static int lfsr_noise_len = 0;
-
 
 static bool is_initialised = false;
 static void psg_global_init(void)
@@ -111,7 +111,7 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 #endif
 }
 
-void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
+void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(psg->timestamp, timestamp)) {
 		return;
@@ -210,8 +210,8 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 		// but it doesn't really matter right now,
 		// as long as we have one that works.
 		outval <<= 8;
-		outhpf_charge += (outval - outhpf_charge)>>14;
-		outval -= outhpf_charge;
+		G->outhpf_charge += (outval - G->outhpf_charge)>>14;
+		outval -= G->outhpf_charge;
 		outval += (1<<(9-1));
 		//outval >>= 9;
 		outval >>= 11;
@@ -237,7 +237,7 @@ void psg_run(struct PSG *psg, struct SMS *sms, uint64_t timestamp)
 #endif
 }
 
-void psg_init(struct PSG *psg)
+void psg_init(struct SMSGlobal *G, struct PSG *psg)
 {
 	psg_global_init();
 	*psg = (struct PSG){ .timestamp=0 };
@@ -251,9 +251,9 @@ void psg_init(struct PSG *psg)
 	psg->period[3] = 0x10;
 }
 
-void psg_write(struct PSG *psg, struct SMS *sms, uint64_t timestamp, uint8_t val)
+void psg_write(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t timestamp, uint8_t val)
 {
-	psg_run(psg, sms, timestamp);
+	psg_run(psg, G, sms, timestamp);
 
 	//printf("PSG %02X\n", val);
 	if((val&0x80) != 0) {
@@ -342,7 +342,7 @@ void psg_write(struct PSG *psg, struct SMS *sms, uint64_t timestamp, uint8_t val
 				break;
 
 			default:
-				psg_write(psg, sms, timestamp, (val&0xF)|(psg->lcmd&0xF0));
+				psg_write(psg, G, sms, timestamp, (val&0xF)|(psg->lcmd&0xF0));
 				break;
 		}
 

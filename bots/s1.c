@@ -52,7 +52,7 @@ const uint8_t E14_BRAKING = 0x0A;
 const uint8_t E14_DYING = 0x0B;
 const uint8_t E14_STUNNED = 0x10;
 
-static bool bot_state_is_bad(struct SMS *sms)
+static bool bot_state_is_bad(struct SMSGlobal *G, struct SMS *sms)
 {
 	uint8_t f18 = sms->ram[0x13FC + 0x18];
 	uint8_t e14 = sms->ram[0x13FC + 0x14];
@@ -66,12 +66,12 @@ static bool bot_state_is_bad(struct SMS *sms)
 	return false;
 }
 
-void bot_update()
+void bot_update(struct SMSGlobal *G)
 {
-	//sms_current.ram[0xD23E & 0x1FFF] = 17;
+	//G->current.ram[0xD23E & 0x1FFF] = 17;
 
 	bool shift_left = (SDL_GetModState() & KMOD_LSHIFT);
-	uint8_t old_j0 = sms_current.joy[0];
+	uint8_t old_j0 = G->current.joy[0];
 
 	//printf("%3d\n", backlog_len);
 	if(shift_left && backlog_len > 3) {
@@ -79,14 +79,14 @@ void bot_update()
 		backlog_idx -= 2;
 		backlog_idx += BACKLOG_CAP;
 		backlog_idx %= BACKLOG_CAP;
-		uint8_t j0 = sms_current.joy[0];
-		uint8_t j1 = sms_current.joy[1];
-		sms_copy(&sms_current, &backlog[backlog_idx]);
-		sms_current.joy[0] = j0;
-		sms_current.joy[1] = j1;
+		uint8_t j0 = G->current.joy[0];
+		uint8_t j1 = G->current.joy[1];
+		sms_copy(&G->current, &backlog[backlog_idx]);
+		G->current.joy[0] = j0;
+		G->current.joy[1] = j1;
 	}
 
-	sms_copy(&backlog[backlog_idx], &sms_current);
+	sms_copy(&backlog[backlog_idx], &G->current);
 	backlog_len++;
 	backlog_idx++;
 	backlog_idx %= BACKLOG_CAP;
@@ -94,7 +94,7 @@ void bot_update()
 		backlog_len = BACKLOG_CAP;
 	}
 
-	if(bot_state_is_bad(&sms_current)) {
+	if(bot_state_is_bad(G, &G->current)) {
 		printf("BAD STATE! PERFORMING RETROSPECTIVE FIX\n");
 
 		for(int dist = 1; ; dist+=1) {
@@ -127,9 +127,9 @@ void bot_update()
 				for(int soffs = 0; soffs < dist; soffs++) {
 					int nsidx = (sidx+soffs)%BACKLOG_CAP;
 					sms_temp.joy[0] = backlog[nsidx].joy[0] ^ j0;
-					sms_run_frame(&sms_temp);
+					sms_run_frame(G, &sms_temp);
 
-					if(bot_state_is_bad(&sms_temp)) {
+					if(bot_state_is_bad(G, &sms_temp)) {
 						//printf("BAD %02X %d %d %d %d\n", j0, sidx, soffs, nsidx, dist);
 						this_state_is_safe = false;
 						break;
@@ -142,16 +142,16 @@ void bot_update()
 
 					int diff = 0;
 					// Sonic 1
-					//int32_t px1 = (*(int32_t *)(&sms_current.ram[0x13FD])<<8)>>8;
+					//int32_t px1 = (*(int32_t *)(&G->current.ram[0x13FD])<<8)>>8;
 					//int32_t px2 = (*(int32_t *)(&sms_temp.ram[0x13FD])<<8)>>8;
 					// Sonic 2 [v1]
-					int32_t px1 = (*(int32_t *)(&sms_current.ram[0x1510])<<8)>>8;
+					int32_t px1 = (*(int32_t *)(&G->current.ram[0x1510])<<8)>>8;
 					int32_t px2 = (*(int32_t *)(&sms_temp.ram[0x1510])<<8)>>8;
 					diff = px2-px1;
 					/*
 					for(int i = 0; i < 8192; i++) {
 						int b0 = sms_temp.ram[i];
-						int b1 = sms_current.ram[i];
+						int b1 = G->current.ram[i];
 						int d = (int)(int8_t)(b0-b1);
 						diff += d*d;
 					}
@@ -179,21 +179,21 @@ void bot_update()
 					sms_temp.joy[0] = backlog[nsidx].joy[0] ^ j0;
 					sms_copy(&backlog[nsidx], &sms_temp);
 					backlog[nsidx].no_draw = false;
-					sms_run_frame(&sms_temp);
-					assert(!bot_state_is_bad(&sms_temp));
+					sms_run_frame(G, &sms_temp);
+					assert(!bot_state_is_bad(G, &sms_temp));
 				}
-				sms_copy(&sms_current, &sms_temp);
-				sms_current.no_draw = false;
-				sms_current.joy[0] = old_j0;
-				twait = time_now()-20000;
+				sms_copy(&G->current, &sms_temp);
+				G->current.no_draw = false;
+				G->current.joy[0] = old_j0;
+				G->twait = time_now()-20000;
 				printf("RECREATE %d\n", dist);
 				break;
 			}
 		}
 	}
 
-	//printf("%02X\n", sms_current.ram[0x12AA]);
-	for(int i = 0; i < 0x1A; i++) { printf(" %02X", sms_current.ram[i+0x13FC]); }
+	//printf("%02X\n", G->current.ram[0x12AA]);
+	for(int i = 0; i < 0x1A; i++) { printf(" %02X", G->current.ram[i+0x13FC]); }
 	printf("\n");
 
 	//bool shift_left = (SDL_GetModState() & KMOD_LSHIFT);
@@ -201,6 +201,6 @@ void bot_update()
 	//if(!(shift_left || shift_right)) { return; }
 
 	//int32_t px1 = (*(int32_t *)(&sms->ram[0x13FD])<<8)>>8;
-	//twait = time_now()-20000;
+	//G->twait = time_now()-20000;
 }
 
