@@ -1,6 +1,8 @@
+//include "audio/sn76489/all.h"
+
 // XXX: do we move this to SMSGlobal?
 #ifndef DEDI
-int16_t sound_data[PSG_OUT_BUF_LEN];
+static int16_t sound_data[PSG_OUT_BUF_LEN];
 static size_t sound_data_out_offs;
 static size_t sound_data_offs = 0;
 static SDL_atomic_t sound_data_len;

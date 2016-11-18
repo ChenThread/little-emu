@@ -1,6 +1,7 @@
 #!/bin/sh
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms-dedi.so \
 	-Isrc \
+	-Isrc/system/sms \
 	\
 	src/system/sms/*.c \
 	\
@@ -9,6 +10,7 @@ gcc -std=gnu99 -O2 -g -o dedi-lsms src/main.c -L. -Wl,-rpath,. -littlesms-dedi \
 	-DDEDI -ldl -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms.so \
 	-Isrc \
+	-Isrc/system/sms \
 	\
 	src/system/sms/*.c \
 	\

@@ -6,87 +6,9 @@
 
 #define TIME_IN_ORDER(t0, t1) (((t0) - (t1)) > ((t1) - (t0)))
 
-#define PSG_OUT_BUF_LEN (1<<24)
-
-#define RB 0
-#define RC 1
-#define RD 2
-#define RE 3
-#define RH 4
-#define RL 5
-#define RF 6
-#define RA 7
-
-#if (USE_NTSC) != 0
-#define SCANLINES 262
-#define FRAME_START_Y 43
-#define FRAME_BORDER_TOP 27
-#define FRAME_BORDER_BOTTOM 24
-#define FRAME_WAIT (1000000/60)
-#else
-#define SCANLINES 313
-#define FRAME_START_Y 70
-#define FRAME_BORDER_TOP 54
-#define FRAME_BORDER_BOTTOM 48
-#define FRAME_WAIT (1000000/50)
-#endif
-
-struct Z80
-{
-	// CPU state
-	uint8_t gpr[8];
-	uint8_t shadow[8];
-	uint8_t idx[2][2];
-	uint8_t wz[4]; // internal register + shadow; required for some flag bit 3/5 stuff
-	uint8_t i,r,iff1,iff2;
-	uint16_t sp;
-	uint16_t pc;
-	uint8_t halted, im, noni;
-
-	// Tracking state
-	uint64_t timestamp;
-	uint64_t timestamp_end;
-} __attribute__((__packed__));
-
-struct VDP
-{
-	// VDP state
-	uint8_t sprd[8][4];
-	uint8_t regs[16];
-	uint8_t sprx[8];
-	uint16_t ctrl_addr;
-	uint8_t ctrl_latch;
-	uint8_t read_buf;
-	uint8_t status;
-	uint8_t status_latches;
-
-	uint8_t line_counter;
-	uint8_t scx, scy;
-
-	uint8_t irq_out;
-	uint8_t irq_mask;
-
-	
-	// Tracking state
-	uint64_t timestamp;
-	uint64_t timestamp_end;
-} __attribute__((__packed__));
-
-struct PSG
-{
-	// PSG state
-	uint16_t period[4];
-	uint32_t poffs[4];
-	uint16_t vol[4];
-	uint16_t onstate[4];
-	uint16_t lfsr_offs;
-	uint8_t lcmd;
-	uint8_t lnoise;
-	
-	// Tracking state
-	uint64_t timestamp;
-	uint64_t timestamp_end;
-} __attribute__((__packed__));
+#include "video/tms9918/all.h"
+#include "audio/sn76489/all.h"
+#include "cpu/z80/all.h"
 
 struct SMS
 {

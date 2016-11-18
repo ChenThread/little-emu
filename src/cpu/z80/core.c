@@ -1,3 +1,5 @@
+//include "cpu/z80/all.h"
+
 void Z80NAME(reset)(struct Z80 *z80)
 {
 	z80->iff1 = 0;

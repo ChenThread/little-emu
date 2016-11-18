@@ -1,3 +1,5 @@
+//include "video/tms9918/all.h"
+
 static const uint64_t HSC_OFFS = (47-17);
 static const uint64_t LINT_OFFS = (47-17);
 static const uint64_t SLATCH_OFFS = (47-15);
