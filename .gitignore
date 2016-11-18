@@ -2,7 +2,8 @@
 *.sms
 
 # built stuff
-lsms
+lemu
+dedi-lemu
 *.so
 *.o
 

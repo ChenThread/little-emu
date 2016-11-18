@@ -1,22 +1,13 @@
 #!/bin/sh
 ./dbuild.sh && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms-dedi.so \
-	-Isrc \
-	-Isrc/system/sms \
-	\
-	src/system/sms/*.c \
-	\
-	-DDEDI -lm -Wall && \
-gcc -std=gnu99 -O2 -g -o dedi-lsms -Isrc src/main.c -L. -Wl,-rpath,. -littlesms-dedi \
-	-DDEDI -ldl -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms.so \
+gcc -std=gnu99 -O2 -g -shared -fPIC -o libittle-emu.so \
 	-Isrc \
 	-Isrc/system/sms \
 	\
 	src/system/sms/*.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -o lsms -Isrc src/main.c -L. -Wl,-rpath,. -littlesms \
+gcc -std=gnu99 -O2 -g -o lemu -Isrc src/main.c -L. -Wl,-rpath,. -little-emu \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/s1.so -Isrc bots/s1.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
