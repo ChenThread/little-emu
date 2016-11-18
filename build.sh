@@ -1,4 +1,5 @@
 #!/bin/sh
+./dbuild.sh && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms-dedi.so \
 	-Isrc \
 	-Isrc/system/sms \
@@ -6,7 +7,7 @@ gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms-dedi.so \
 	src/system/sms/*.c \
 	\
 	-DDEDI -lm -Wall && \
-gcc -std=gnu99 -O2 -g -o dedi-lsms src/main.c -L. -Wl,-rpath,. -littlesms-dedi \
+gcc -std=gnu99 -O2 -g -o dedi-lsms -Isrc src/main.c -L. -Wl,-rpath,. -littlesms-dedi \
 	-DDEDI -ldl -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms.so \
 	-Isrc \
@@ -15,7 +16,7 @@ gcc -std=gnu99 -O2 -g -shared -fPIC -o libittlesms.so \
 	src/system/sms/*.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -o lsms src/main.c -L. -Wl,-rpath,. -littlesms \
+gcc -std=gnu99 -O2 -g -o lsms -Isrc src/main.c -L. -Wl,-rpath,. -littlesms \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/s1.so -Isrc bots/s1.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
@@ -27,7 +28,5 @@ gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/corrupt.so -Isrc bots/corrupt.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/net.so -Isrc bots/net.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/server-net.so -Isrc bots/net.c \
-	-DSERVER -lm -Wall && \
 true
 

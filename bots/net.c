@@ -12,7 +12,7 @@
 #ifndef SERVER
 #include <SDL.h>
 #endif
-#include "littlesms.h"
+#include "system/sms/all.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>

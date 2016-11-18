@@ -16,7 +16,8 @@
 #include <SDL.h>
 #endif
 
-#include "littlesms.h"
+// TODO: get more than one thing working (needs API!)
+#include "system/sms/all.h"
 
 void *botlib = NULL;
 void (*botlib_init)(struct SMSGlobal *G, int argc, char *argv[]) = NULL;

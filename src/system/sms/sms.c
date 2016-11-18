@@ -1,4 +1,4 @@
-#include "common.h"
+#include "system/sms/all.h"
 
 struct SMSGlobal sms_glob;
 void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp) = NULL;

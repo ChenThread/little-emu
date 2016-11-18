@@ -7,7 +7,7 @@
 #include <errno.h>
 
 #include <SDL.h>
-#include "littlesms.h"
+#include "system/sms/all.h"
 
 #define BACKLOG_CAP 16384
 struct SMS backlog[BACKLOG_CAP];

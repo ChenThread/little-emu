@@ -7,7 +7,7 @@
 #include <errno.h>
 
 #include <SDL.h>
-#include "littlesms.h"
+#include "system/sms/all.h"
 
 #define BACKLOG0_CAP 64
 #define BACKLOG1_CAP 16384

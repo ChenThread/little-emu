@@ -1,4 +1,4 @@
-#include "common.h"
+#include "system/sms/all.h"
 
 #define VDP_ADD_CYCLES(vdp, v) (vdp)->timestamp += ((v)*2)
 

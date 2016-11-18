@@ -1,4 +1,4 @@
-#include "common.h"
+#include "system/sms/all.h"
 
 #define z80_mem_write sms_z80_mem_write
 #define z80_mem_read sms_z80_mem_read
