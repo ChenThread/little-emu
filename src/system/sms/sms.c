@@ -10,6 +10,15 @@ const char lemu_core_name[] = "Sega Master System ("
 "SMS2 "
 "VDP)";
 
+const char *lemu_core_inputs_global[1] = {
+	NULL
+};
+const char *lemu_core_inputs_player[7] = {
+	"Up", "Down", "Left", "Right",
+	"1", "2",
+	NULL
+};
+
 struct SMSGlobal sms_glob;
 void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp) = NULL;
 
@@ -512,8 +521,16 @@ void sms_init_global(struct SMSGlobal *G, const char *fname, const void *data, s
 
 			.ram_count = 3,
 			.rom_count = 2,
+
+			.chicken_pointer_count = 0,
+			.chicken_pointers = NULL,
+
+			.player_count = 2,
 		},
 	};
+
+	G->H.current_state = &(G->current);
+	G->H.twait = 0;
 
 	sms_rom_load(G, fname, data, len);
 
@@ -562,5 +579,13 @@ struct EmuGlobal *lemu_core_global_new(const char *fname, const void *data, size
 	sms_init_global(G, fname, data, len);
 
 	return &(G->H);
+}
+
+void lemu_core_run_frame(struct EmuGlobal *G, void *sms, bool no_draw)
+{
+	bool old_no_draw = no_draw;
+	((struct SMS *)sms)->no_draw = no_draw;
+	sms_run_frame((struct SMSGlobal *)G, (struct SMS *)sms);
+	((struct SMS *)sms)->no_draw = old_no_draw;
 }
 

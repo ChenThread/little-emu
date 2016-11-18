@@ -747,7 +747,7 @@ void bot_update(struct SMSGlobal *G)
 			// Adjust timer based on delay
 			if(player_id >= 0) {
 				adjx++;
-				G->twait += (adjx*FRAME_WAIT)/128;
+				G->H.twait += (adjx*FRAME_WAIT)/128;
 			}
 
 			// Apply + check for diffs
@@ -996,7 +996,7 @@ void bot_update(struct SMSGlobal *G)
 	if(player_id < 0) {
 		//printf("***** SPEC %d\n", backlog_end);
 		if((int32_t)(serv_frame_idx-backlog_end) >= 40) {
-			G->twait = time_now()-FRAME_WAIT*35;
+			G->H.twait = time_now()-FRAME_WAIT*35;
 		}
 	}
 
@@ -1007,7 +1007,7 @@ void bot_update(struct SMSGlobal *G)
 #ifdef SERVER
 
 	// If server... don't wait.
-	G->twait = time_now()-FRAME_WAIT;
+	G->H.twait = time_now()-FRAME_WAIT;
 #endif
 }
 

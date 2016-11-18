@@ -2,6 +2,8 @@ DRAFT. likely to be wrong.
 
 TODO:
 - inputs
+- video output
+- audio output
 - ROM detection
 
 We care about *state* and *global*.
@@ -10,12 +12,18 @@ We care about *state* and *global*.
 ONE CORE PER SHARED OBJECT.
 
 const char lemu_core_name[];
+const char *lemu_core_inputs_global[]; // end with NULL
+const char *lemu_core_inputs_player[]; // end with NULL
 
 struct EmuGlobals *lemu_core_global_new(const char *fname, const void *data, size_t len);
-void lemu_core_global_free(struct EmuGlobals *G);
-void lemu_core_state_init(struct EmuGlobals *G, void *state);
+void lemu_core_global_free(struct EmuGlobal *G);
+void lemu_core_state_init(struct EmuGlobal *G, void *state);
 
-bool lemu_core_run_frame(void *globals, void *state);
+void lemu_core_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
+
+// public lemu API for frontend authors / bot authors
+void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
+void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
 
 // structure must not be packed
 // this does not need to be serialised at all
@@ -46,10 +54,6 @@ struct EmuGlobal {
 	size_t chicken_pointer_count;
 	void **chicken_pointers;
 
-	size_t global_input_count;
-	const char **global_input_names;
-	size_t player_input_count;
-	const char **player_input_names;
 	size_t player_count;
 
 	// Common data

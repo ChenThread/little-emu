@@ -55,7 +55,6 @@ struct SMSGlobal
 	// SMS
 	uint8_t rom[4*1024*1024];
 	size_t rom_len;
-	uint64_t twait;
 	bool rom_is_banked;
 
 	// VDP

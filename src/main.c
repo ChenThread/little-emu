@@ -131,7 +131,11 @@ int main(int argc, char *argv[])
 #ifndef DEDI
 	// Set up SDL
 	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
-	window = SDL_CreateWindow("littlesms",
+	char window_title_buf[256];
+	snprintf(window_title_buf, sizeof(window_title_buf)-1,
+		"little-emu - core: %s", Gsms.H.core_name);
+	window_title_buf[255] = '\x00';
+	window = SDL_CreateWindow(window_title_buf,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
 		342*2,
@@ -166,29 +170,29 @@ int main(int argc, char *argv[])
 #ifndef DEDI
 	SDL_PauseAudio(0);
 #endif
-	Gsms.twait = time_now();
+	Gsms.H.twait = time_now();
 	for(;;) {
 		struct SMS *sms = &Gsms.current;
 		struct SMS sms_ndsim;
 		sms->joy[0] = botlib_hook_input(&Gsms, sms, sms->timestamp, 0);
 		sms->joy[1] = botlib_hook_input(&Gsms, sms, sms->timestamp, 1);
 		bot_update();
-		sms_copy(&sms_ndsim, sms);
-		sms_run_frame(&Gsms, sms);
+		lemu_copy(&Gsms.H, &sms_ndsim, sms);
+		lemu_run_frame(&Gsms.H, sms, false);
 		/*
 		sms_ndsim.no_draw = true;
-		sms_run_frame(&sms_ndsim);
+		lemu_run_frame(&Gsms, &sms_ndsim, true);
 		sms_ndsim.no_draw = false;
 		assert(memcmp(&sms_ndsim, sms, sizeof(struct SMS)) == 0);
 		*/
 
 		uint64_t tnow = time_now();
-		Gsms.twait += FRAME_WAIT;
+		Gsms.H.twait += FRAME_WAIT;
 		if(sms->no_draw) {
-			Gsms.twait = tnow;
+			Gsms.H.twait = tnow;
 		} else {
-			if(TIME_IN_ORDER(tnow, Gsms.twait)) {
-				usleep((useconds_t)(Gsms.twait-tnow));
+			if(TIME_IN_ORDER(tnow, Gsms.H.twait)) {
+				usleep((useconds_t)(Gsms.H.twait-tnow));
 			}
 		}
 

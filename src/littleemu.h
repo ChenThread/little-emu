@@ -33,10 +33,6 @@ struct EmuGlobal {
 	size_t chicken_pointer_count;
 	void **chicken_pointers;
 
-	size_t global_input_count;
-	const char **global_input_names;
-	size_t player_input_count;
-	const char **player_input_names;
 	size_t player_count;
 
 	// Common data
@@ -49,4 +45,7 @@ struct EmuGlobal {
 
 // core.c
 uint64_t time_now(void);
+void lemu_get_core_name(struct EmuGlobal *G, void *state, bool no_draw);
+void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
+void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
 

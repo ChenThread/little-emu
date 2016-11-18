@@ -178,7 +178,7 @@ void bot_update(struct SMSGlobal *G)
 				sms_copy(&G->current, &sms_temp);
 				G->current.no_draw = false;
 				G->current.joy[0] = old_j0;
-				G->twait = time_now()-20000;
+				G->H.twait = time_now()-20000;
 				printf("RECREATE %d\n", dist);
 				break;
 			}
@@ -194,5 +194,5 @@ void bot_update(struct SMSGlobal *G)
 	//if(!(shift_left || shift_right)) { return; }
 
 	//int32_t px1 = (*(int32_t *)(&sms->ram[0x13FD])<<8)>>8;
-	//G->twait = time_now()-20000;
+	//G->H.twait = time_now()-20000;
 }
