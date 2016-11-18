@@ -66,15 +66,13 @@ static void drop_frame(struct SMSGlobal *G)
 			sms_copy(&backlog0[i], &backlog0[i-1]);
 			backlog0[i].joy[0] = input_log[i-1+b1][0];
 			backlog0[i].joy[1] = input_log[i-1+b1][1];
-			backlog0[i].no_draw = true;
 			/*
 			printf("%2d %9d %02X %02X\n", i, i+b1
 				, backlog0[i].joy[0]
 				, backlog0[i].joy[1]
 				);
 			*/
-			sms_run_frame(G, &backlog0[i]);
-			backlog0[i].no_draw = false;
+			lemu_run_frame(&(G->H), &backlog0[i], true);
 			backlog0[i].joy[0] = input_log[i+b1][0];
 			backlog0[i].joy[1] = input_log[i+b1][1];
 		}
@@ -133,12 +131,10 @@ void bot_update(struct SMSGlobal *G)
 	struct SMS broken_state;
 	sms_copy(&safe_state, &G->current);
 	sms_copy(&broken_state, &G->current);
-	safe_state.no_draw = true;
-	broken_state.no_draw = true;
 	memcpy(G->rom, rom_backup, sizeof(rom_backup));
-	sms_run_frame(G, &safe_state);
+	lemu_run_frame(&(G->H), &safe_state, true);
 	memcpy(G->rom, rom_main, sizeof(rom_main));
-	sms_run_frame(G, &broken_state);
+	lemu_run_frame(&(G->H), &broken_state, true);
 	int rdiff = 0;
 	int vdiff = 0;
 	for(int i = 0; i < 8192; i++) {
@@ -174,7 +170,7 @@ void bot_update(struct SMSGlobal *G)
 			sms_copy(&broken_state, &G->current);
 			memcpy(G->rom, rom_main, sizeof(rom_main));
 			memcpy(G->rom+offs, rom_backup+offs, step);
-			sms_run_frame(G, &broken_state);
+			lemu_run_frame(&(G->H), &broken_state, true);
 			bool s0_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 			bool s0_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 
@@ -182,7 +178,7 @@ void bot_update(struct SMSGlobal *G)
 			sms_copy(&broken_state, &G->current);
 			memcpy(G->rom, rom_main, sizeof(rom_main));
 			memcpy(G->rom+offs+step, rom_backup+offs+step, step);
-			sms_run_frame(G, &broken_state);
+			lemu_run_frame(&(G->H), &broken_state, true);
 			bool s1_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 			bool s1_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 
@@ -198,7 +194,7 @@ void bot_update(struct SMSGlobal *G)
 					sms_copy(&broken_state, &G->current);
 					memcpy(G->rom, rom_main, sizeof(rom_main));
 					memcpy(G->rom+offs+step, rom_backup+offs+step, step);
-					sms_run_frame(G, &broken_state);
+					lemu_run_frame(&(G->H), &broken_state, true);
 					bool s2_mismatch = (safe_state.z80.pc != broken_state.z80.pc);
 					bool s2_slip = (safe_state.z80.iff1 != 0 && broken_state.z80.iff1 == 0);
 

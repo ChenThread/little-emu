@@ -47,12 +47,11 @@ void input_fetch(struct EmuGlobal *G, void *state, uint64_t timestamp)
 {
 #ifndef DEDI
 	int i;
-	struct SMS *sms = (struct SMS *)state;
 	SDL_Event ev;
 
 	//printf("input %016llX %d\n", (unsigned long long)timestamp, port);
 
-	if(!sms->no_draw) {
+	if(!Gbase->no_draw) {
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
 			case SDL_KEYDOWN:
@@ -183,7 +182,7 @@ int main(int argc, char *argv[])
 
 		uint64_t tnow = time_now();
 		Gbase->twait += FRAME_WAIT;
-		if(sms->no_draw) {
+		if(Gbase->no_draw) {
 			Gbase->twait = tnow;
 		} else {
 			if(TIME_IN_ORDER(tnow, Gbase->twait)) {
@@ -192,7 +191,7 @@ int main(int argc, char *argv[])
 		}
 
 #ifndef DEDI
-		if(!sms->no_draw)
+		if(!Gbase->no_draw)
 		{
 			// Draw + upscale
 			SDL_LockTexture(texture, NULL, &(Gsurface->pixels), &(Gsurface->pitch));

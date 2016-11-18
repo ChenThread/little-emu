@@ -120,9 +120,8 @@ void psg_run(struct PSG *psg, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 
 	uint64_t timediff = timestamp - psg->timestamp;
 
-	// TODO: proper no_draw version
 #ifndef DEDI
-	if(sms->no_draw) {
+	if(G->H.no_draw) {
 #endif
 		for(int ch = 0; ch < 4; ch++) {
 			if(psg->period[ch] <= 1) {

@@ -31,36 +31,34 @@ static void drop_frame(struct SMSGlobal *G)
 	// If we are copying from a different block, expand the block
 	if(i1 != i0) {
 		// Copy from suitable backlog1
-		sms_copy(&backlog0[0], &backlog1[i1]);
+		lemu_copy(&(G->H), &backlog0[0], &backlog1[i1]);
 
 		// Complete backlog0
 		for(int i = 1; i < BACKLOG0_CAP /* && i+b1 < backlog_idx */; i++) {
-			sms_copy(&backlog0[i], &backlog0[i-1]);
+			lemu_copy(&(G->H), &backlog0[i], &backlog0[i-1]);
 			backlog0[i].joy[0] = input_log[i-1+b1][0];
 			backlog0[i].joy[1] = input_log[i-1+b1][1];
-			backlog0[i].no_draw = true;
 			/*
 			printf("%2d %9d %02X %02X\n", i, i+b1
 				, backlog0[i].joy[0]
 				, backlog0[i].joy[1]
 				);
 			*/
-			sms_run_frame(G, &backlog0[i]);
-			backlog0[i].no_draw = false;
+			lemu_run_frame(&(G->H), &backlog0[i], true);
 			backlog0[i].joy[0] = input_log[i+b1][0];
 			backlog0[i].joy[1] = input_log[i+b1][1];
 		}
 	}
 
 	// Copy state
-	sms_copy(&G->current, &backlog0[backlog_idx % BACKLOG0_CAP]);
+	lemu_copy(&(G->H), G->H.current_state, &backlog0[backlog_idx % BACKLOG0_CAP]);
 }
 
 static void save_frame(struct SMSGlobal *G)
 {
-	sms_copy(&backlog0[backlog_idx % BACKLOG0_CAP], &G->current);
+	lemu_copy(&G->H, &backlog0[backlog_idx % BACKLOG0_CAP], G->H.current_state);
 	if((backlog_idx % BACKLOG0_CAP) == 0) {
-		sms_copy(&backlog1[backlog_idx / BACKLOG0_CAP], &G->current);
+		lemu_copy(&G->H, &backlog1[backlog_idx / BACKLOG0_CAP], G->H.current_state);
 	}
 	backlog_idx++;
 }

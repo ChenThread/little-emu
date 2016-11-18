@@ -116,9 +116,6 @@ void bot_update(struct SMSGlobal *G)
 				// Copy state
 				sms_copy(&sms_temp, &backlog[sidx]);
 
-				// Set joypad + disable video
-				sms_temp.no_draw = true;
-
 				// Select thing to toggle
 				uint8_t j0 = (1<<jset);
 
@@ -127,7 +124,7 @@ void bot_update(struct SMSGlobal *G)
 				for(int soffs = 0; soffs < dist; soffs++) {
 					int nsidx = (sidx+soffs)%BACKLOG_CAP;
 					sms_temp.joy[0] = backlog[nsidx].joy[0] ^ j0;
-					sms_run_frame(G, &sms_temp);
+					lemu_run_frame(&(G->H), &sms_temp, true);
 
 					if(bot_state_is_bad(G, &sms_temp)) {
 						//printf("BAD %02X %d %d %d %d\n", j0, sidx, soffs, nsidx, dist);
@@ -169,21 +166,16 @@ void bot_update(struct SMSGlobal *G)
 				// Copy state
 				sms_copy(&sms_temp, &backlog[sidx]);
 
-				// Set joypad + disable video
-				sms_temp.no_draw = true;
-
 				// Select thing to toggle
 				uint8_t j0 = best_j0;
 				for(int soffs = 0; soffs < dist; soffs++) {
 					int nsidx = (sidx+soffs)%BACKLOG_CAP;
 					sms_temp.joy[0] = backlog[nsidx].joy[0] ^ j0;
 					sms_copy(&backlog[nsidx], &sms_temp);
-					backlog[nsidx].no_draw = false;
-					sms_run_frame(G, &sms_temp);
+					lemu_run_frame(&(G->H), &sms_temp, true);
 					assert(!bot_state_is_bad(G, &sms_temp));
 				}
 				sms_copy(&G->current, &sms_temp);
-				G->current.no_draw = false;
 				G->current.joy[0] = old_j0;
 				G->H.twait = time_now()-20000;
 				printf("RECREATE %d\n", dist);

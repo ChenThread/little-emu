@@ -396,7 +396,7 @@ void vdp_run(struct VDP *vdp, struct SMSGlobal *G, struct SMS *sms, uint64_t tim
 						: 0x00);
 				}
 			}
-		} else if(sms->no_draw) {
+		} else if(G->H.no_draw) {
 			// TODO!
 		} else {
 			int py = (y+scy)%scywrap;

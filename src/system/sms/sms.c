@@ -236,8 +236,6 @@ void sms_init(struct SMSGlobal *G, struct SMS *sms)
 	//sms->vdp.timestamp = 0;
 
 	sms->ram[0] = 0xAB;
-
-	sms->no_draw = false;
 }
 
 void sms_copy(struct SMS *dest, struct SMS *src)
@@ -529,6 +527,8 @@ static void sms_init_global(struct SMSGlobal *G, const char *fname, const void *
 
 			.input_button_count = 6,
 			.player_count = 2,
+
+			.no_draw = false,
 		},
 	};
 
@@ -592,9 +592,9 @@ void lemu_core_global_free(struct EmuGlobal *G)
 void lemu_core_run_frame(struct EmuGlobal *G, void *sms, bool no_draw)
 {
 	bool old_no_draw = no_draw;
-	((struct SMS *)sms)->no_draw = no_draw;
+	G->no_draw = no_draw;
 	sms_run_frame((struct SMSGlobal *)G, (struct SMS *)sms);
-	((struct SMS *)sms)->no_draw = old_no_draw;
+	G->no_draw = old_no_draw;
 }
 
 void lemu_core_state_init(struct EmuGlobal *G, void *state)

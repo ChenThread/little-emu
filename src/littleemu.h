@@ -39,6 +39,7 @@ struct EmuGlobal {
 	// Common data
 	void *current_state; // packed fixed-size structure with no pointers in it
 	uint64_t twait;
+	bool no_draw;
 
 	// Core-specific data
 	uint8_t extra_data[];

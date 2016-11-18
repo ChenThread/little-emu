@@ -126,7 +126,7 @@ void bot_hook_input(struct EmuGlobal *G, struct SMS *sms, uint64_t timestamp)
 	int i;
 	SDL_Event ev;
 
-	if(!sms->no_draw) {
+	if(!G->no_draw) {
 	while(SDL_PollEvent(&ev)) {
 		switch(ev.type) {
 			case SDL_KEYDOWN:
@@ -778,9 +778,7 @@ void bot_update(struct SMSGlobal *G)
 					backlog[idxp].joy[0] = input_log[idxp][0];
 					backlog[idxp].joy[1] = input_log[idxp][1];
 					sms_copy(&backlog[idxn], &backlog[idxp]);
-					backlog[idxn].no_draw = true;
-					sms_run_frame(G, &backlog[idxn]);
-					backlog[idxn].no_draw = false;
+					lemu_run_frame(&(G->H), &backlog[idxn], true);
 					backlog[idxn].joy[0] = input_log[idxn][0];
 					backlog[idxn].joy[1] = input_log[idxn][1];
 				}
@@ -970,9 +968,6 @@ void bot_update(struct SMSGlobal *G)
 			G->H.twait = time_now()-FRAME_WAIT*35;
 		}
 	}
-
-	// Disable no_draw
-	G->current.no_draw = false;
 #endif
 
 #ifdef SERVER
