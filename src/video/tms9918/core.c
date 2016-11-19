@@ -5,10 +5,7 @@ static const uint64_t LINT_OFFS = (47-17);
 static const uint64_t SLATCH_OFFS = (47-15);
 static const uint64_t VINT_OFFS = (47-18);
 
-#define VDP_TIMESTAMP_CAP (((struct SMS *)state)->z80.H.timestamp_end)
-// FIXME need to decouple from SMS Z80 somehow
-
-void vdp_estimate_line_irq(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
+void VDPNAME(estimate_line_irq)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(vdp->H.timestamp, VDP_TIMESTAMP_CAP)) {
 		return;
@@ -89,7 +86,7 @@ void vdp_estimate_line_irq(struct VDP *vdp, struct EmuGlobal *G, struct EmuState
 	}
 }
 
-static void vdp_do_reg_write(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
+static void VDPNAME(do_reg_write)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	uint8_t reg = (uint8_t)((vdp->ctrl_addr>>8)&0x0F);
 	uint8_t val = (uint8_t)(vdp->ctrl_addr);
@@ -108,10 +105,10 @@ static void vdp_do_reg_write(struct VDP *vdp, struct EmuGlobal *G, struct EmuSta
 	} else {
 		vdp->irq_mask |=  2;
 	}
-	vdp_estimate_line_irq(vdp, G, state, timestamp);
+	VDPNAME(estimate_line_irq)(vdp, G, state, timestamp);
 }
 
-void vdp_init(struct EmuGlobal *G, struct VDP *vdp)
+void VDPNAME(init)(struct EmuGlobal *G, struct VDP *vdp)
 {
 	*vdp = (struct VDP){ .H={.timestamp=0,}, };
 	vdp->ctrl_addr = 0xBF00;
@@ -133,16 +130,14 @@ void vdp_init(struct EmuGlobal *G, struct VDP *vdp)
 	vdp->irq_out = 0;
 }
 
-void vdp_run(struct VDP *vdp, struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp)
+void VDPNAME(run)(struct VDP *vdp, struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp)
 {
 	timestamp &= ~1;
 	if(!TIME_IN_ORDER(vdp->H.timestamp, timestamp)) {
 		return;
 	}
 
-	// FIXME: decouple
-	struct SMSGlobal *G = (struct SMSGlobal *)H;
-	uint8_t (*frame_data)[342] = G->frame_data;
+	uint8_t (*frame_data)[342] = VDP_FRAME_DATA;
 
 	uint64_t timediff = timestamp - vdp->H.timestamp;
 
@@ -402,7 +397,7 @@ void vdp_run(struct VDP *vdp, struct EmuGlobal *H, struct EmuState *state, uint6
 						: 0x00);
 				}
 			}
-		} else if(G->H.no_draw) {
+		} else if(H->no_draw) {
 			// TODO!
 		} else {
 			int py = (y+scy)%scywrap;
@@ -527,9 +522,9 @@ void vdp_run(struct VDP *vdp, struct EmuGlobal *H, struct EmuState *state, uint6
 	vdp->H.timestamp = vdp->H.timestamp_end;
 }
 
-uint8_t vdp_read_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
+uint8_t VDPNAME(read_ctrl)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	vdp_run(vdp, G, state, timestamp);
+	VDPNAME(run)(vdp, G, state, timestamp);
 	vdp->ctrl_latch = 0;
 	vdp->irq_out &= ~3;
 	uint8_t ret = vdp->status;
@@ -537,9 +532,9 @@ uint8_t vdp_read_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *sta
 	return ret;
 }
 
-uint8_t vdp_read_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
+uint8_t VDPNAME(read_data)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
-	vdp_run(vdp, G, state, timestamp);
+	VDPNAME(run)(vdp, G, state, timestamp);
 	vdp->ctrl_latch = 0;
 	uint8_t ret = vdp->read_buf;
 	vdp->read_buf = vdp->vram[vdp->ctrl_addr&0x3FFF];
@@ -549,9 +544,9 @@ uint8_t vdp_read_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *sta
 	return ret;
 }
 
-void vdp_write_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
+void VDPNAME(write_ctrl)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, G, state, timestamp);
+	VDPNAME(run)(vdp, G, state, timestamp);
 	if(vdp->ctrl_latch == 0) {
 		vdp->ctrl_addr &= ~0x00FF;
 		vdp->ctrl_addr |= ((uint16_t)val)<<0;
@@ -571,7 +566,7 @@ void vdp_write_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state
 			case 1: // Write
 				break;
 			case 2: // Register
-				vdp_do_reg_write(vdp, G, state, timestamp);
+				VDPNAME(do_reg_write)(vdp, G, state, timestamp);
 				break;
 			case 3: // CRAM
 				break;
@@ -582,9 +577,9 @@ void vdp_write_ctrl(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state
 	//printf("VDP CTRL %02X\n", val);
 }
 
-void vdp_write_data(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
+void VDPNAME(write_data)(struct VDP *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	vdp_run(vdp, G, state, timestamp);
+	VDPNAME(run)(vdp, G, state, timestamp);
 	//if(vdp->ctrl_latch != 0) { printf("VDP DLWR %04X %02X\n", vdp->ctrl_addr, val); }
 	vdp->ctrl_latch = 0;
 	if(vdp->ctrl_addr >= 0xC000) {

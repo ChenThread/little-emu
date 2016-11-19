@@ -69,8 +69,10 @@ void lemu_state_init(struct EmuGlobal *G, void *state);
 void lemu_run_frame(struct EmuGlobal *G, void *state, bool no_draw);
 void lemu_copy(struct EmuGlobal *G, void *dest_state, void *src_state);
 void lemu_handle_input(struct EmuGlobal *G, void *state, int player_id, int input_id, bool down);
+uint32_t lemu_frame_wait_get(void);
 
 struct EmuSurface *lemu_surface_new(struct EmuGlobal *G);
 void lemu_surface_free(struct EmuSurface* surface);
 void lemu_video_callback(struct EmuGlobal *G, struct EmuSurface *S);
 void lemu_audio_callback(struct EmuGlobal *G, void *state, uint8_t *stream, int len);
+

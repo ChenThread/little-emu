@@ -6,6 +6,7 @@
 
 // TODO: make cores more separable
 struct EmuGlobal *lemu_core_global_new(const char *fname, const void *data, size_t len);
+extern uint64_t lemu_core_frame_wait;
 void lemu_core_global_free(struct EmuGlobal *G);
 void lemu_core_state_init(struct EmuGlobal *G, void *state);
 void lemu_core_run_frame(struct EmuGlobal *G, void *sms, bool no_draw);
@@ -77,3 +78,8 @@ void lemu_video_callback(struct EmuGlobal *G, struct EmuSurface* S) {
 void lemu_handle_input(struct EmuGlobal *G, void *state, int player_id, int input_id, bool down) {
 	lemu_core_handle_input(G, state, player_id, input_id, down);
 }
+
+uint32_t lemu_frame_wait_get(void) {
+	return lemu_core_frame_wait;
+}
+

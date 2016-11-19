@@ -1,15 +1,6 @@
 //include "audio/sn76489/all.h"
 
-// XXX: could be moved to some form of global state?
-#ifndef DEDI
-static int32_t outhpf_charge;
-static int16_t sound_data[PSG_OUT_BUF_LEN];
-static size_t sound_data_out_offs;
-static size_t sound_data_offs = 0;
-static SDL_atomic_t sound_data_len;
-#endif
-
-static uint16_t psg_volumes[16] = {
+static uint16_t PSGNAME(volumes)[16] = {
 	16384, 13014, 10338, 8211 ,
 	6523 , 5181 , 4115 , 3269 ,
 	2597 , 2063 , 1638 , 1301 ,
@@ -19,13 +10,13 @@ static uint8_t lfsr_noise_sequence[65536];
 static int lfsr_noise_len = 0;
 
 static bool is_initialised = false;
-static void psg_global_init(void)
+static void PSGNAME(global_init)(void)
 {
 	if(is_initialised) {
 		return;
 	}
 #ifndef DEDI
-	SDL_AtomicSet(&sound_data_len, 0);
+	SDL_AtomicSet(&PSG_SOUND_DATA_LEN, 0);
 #endif
 	is_initialised = true;
 
@@ -47,7 +38,7 @@ static void psg_global_init(void)
 	//printf("%d\n", lfsr_noise_len);
 }
 
-void psg_pop_16bit_mono(int16_t *buf, size_t len)
+void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 {
 	// TODO: proper interpolation
 	if(!is_initialised) {
@@ -57,8 +48,8 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 
 #ifndef DEDI
 	// Get number of samples to read/write
-	ssize_t src_len = SDL_AtomicGet(&sound_data_len);
-	SDL_AtomicAdd(&sound_data_len, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
+	ssize_t src_len = SDL_AtomicGet(&PSG_SOUND_DATA_LEN);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
 	src_len &= (PSG_OUT_BUF_LEN-1);
 #if USE_NTSC
 	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000;
@@ -93,7 +84,7 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 	size_t suboffs = 0;
 	for(size_t i = 0; i < len; i++) {
 		// Read sample
-		buf[i] = sound_data[sound_data_out_offs];
+		buf[i] = PSG_SOUND_DATA[PSG_SOUND_DATA_OUT_OFFS];
 
 		//if(buf[i] != 0) { printf("%d\n", buf[i]); }
 
@@ -106,14 +97,14 @@ void psg_pop_16bit_mono(int16_t *buf, size_t len)
 		}
 
 		// Advance
-		sound_data_out_offs += xstep;
-		sound_data_out_offs &= PSG_OUT_BUF_LEN-1;
+		PSG_SOUND_DATA_OUT_OFFS += xstep;
+		PSG_SOUND_DATA_OUT_OFFS &= PSG_OUT_BUF_LEN-1;
 	}
-	SDL_AtomicAdd(&sound_data_len, -samples_to_read);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, -samples_to_read);
 #endif
 }
 
-void psg_run(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
+void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(psg->H.timestamp, timestamp)) {
 		return;
@@ -211,13 +202,8 @@ void psg_run(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint6
 		// but it doesn't really matter right now,
 		// as long as we have one that works.
 		outval <<= 8;
-
-		// FIXME: get a generic framework working for this
-		//G->outhpf_charge += (outval - G->outhpf_charge)>>14;
-		//outval -= G->outhpf_charge;
-		outhpf_charge += (outval - outhpf_charge)>>14;
-		outval -= outhpf_charge;
-
+		PSG_OUTHPF_CHARGE += (outval - PSG_OUTHPF_CHARGE)>>14;
+		outval -= PSG_OUTHPF_CHARGE;
 		outval += (1<<(9-1));
 		//outval >>= 9;
 		outval >>= 11;
@@ -231,21 +217,21 @@ void psg_run(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint6
 		}
 
 		// Output and advance
-		sound_data[sound_data_offs++] = outval;
-		sound_data_offs &= (PSG_OUT_BUF_LEN-1);
+		PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
+		PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
 	}
 	SDL_LockAudio();
-	SDL_AtomicAdd(&sound_data_len, timediff);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, timediff);
 	SDL_UnlockAudio();
-	//assert(SDL_AtomicGet(&sound_data_len) < PSG_OUT_BUF_LEN);
+	//assert(SDL_AtomicGet(&PSG_SOUND_DATA_LEN) < PSG_OUT_BUF_LEN);
 
 	psg->H.timestamp = timestamp;
 #endif
 }
 
-void psg_init(struct EmuGlobal *G, struct PSG *psg)
+void PSGNAME(init)(struct EmuGlobal *G, struct PSG *psg)
 {
-	psg_global_init();
+	PSGNAME(global_init)();
 	*psg = (struct PSG){ .H = {.timestamp=0,}, };
 	psg->vol[0] = 0xF;
 	psg->vol[1] = 0xF;
@@ -257,9 +243,9 @@ void psg_init(struct EmuGlobal *G, struct PSG *psg)
 	psg->period[3] = 0x10;
 }
 
-void psg_write(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
+void PSGNAME(write)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint8_t val)
 {
-	psg_run(psg, G, state, timestamp);
+	PSGNAME(run)(psg, G, state, timestamp);
 
 	//printf("PSG %02X\n", val);
 	if((val&0x80) != 0) {
@@ -289,16 +275,16 @@ void psg_write(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uin
 
 			// Volumes
 			case 0x1:
-				psg->vol[0] = psg_volumes[val&0xF];
+				psg->vol[0] = PSGNAME(volumes)[val&0xF];
 				break;
 			case 0x3:
-				psg->vol[1] = psg_volumes[val&0xF];
+				psg->vol[1] = PSGNAME(volumes)[val&0xF];
 				break;
 			case 0x5:
-				psg->vol[2] = psg_volumes[val&0xF];
+				psg->vol[2] = PSGNAME(volumes)[val&0xF];
 				break;
 			case 0x7:
-				psg->vol[3] = psg_volumes[val&0xF];
+				psg->vol[3] = PSGNAME(volumes)[val&0xF];
 				break;
 
 			// LFSR noise pattern stuff
@@ -348,7 +334,7 @@ void psg_write(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uin
 				break;
 
 			default:
-				psg_write(psg, G, state, timestamp, (val&0xF)|(psg->lcmd&0xF0));
+				PSGNAME(write)(psg, G, state, timestamp, (val&0xF)|(psg->lcmd&0xF0));
 				break;
 		}
 

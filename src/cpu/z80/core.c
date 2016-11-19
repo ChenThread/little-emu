@@ -324,18 +324,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 
 	// If halted, don't waste time fetching ops
 	if(z80->halted) {
-		if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
-			/*
-			printf("IN_IRQ HALT2 %d %d %02X %02X %02X %016llX\n"
-				, z80->noni
-				, z80->iff1
-				, sms->vdp.irq_out
-				, sms->vdp.irq_mask
-				, sms->vdp.status
-				, (unsigned long long)z80->H.timestamp
-				);
-			*/
-
+		if(z80->iff1 != 0 && Z80_INT_CHECK) {
 			Z80NAME(irq)(z80, Z80_STATE_ARGS, 0xFF);
 		} else {
 			while(TIME_IN_ORDER(z80->H.timestamp, timestamp)) {
@@ -359,18 +348,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 		}
 
 		// Check for IRQ
-		if(z80->noni == 0 && z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
-			/*
-			printf("IN_IRQ %d %d %02X %02X %02X %016llX\n"
-				, z80->noni
-				, z80->iff1
-				, sms->vdp.irq_out
-				, sms->vdp.irq_mask
-				, sms->vdp.status
-				, (unsigned long long)z80->H.timestamp
-				);
-			*/
-
+		if(z80->noni == 0 && z80->iff1 != 0 && Z80_INT_CHECK) {
 			Z80NAME(irq)(z80, Z80_STATE_ARGS, 0xFF);
 		}
 		z80->noni = 0;
@@ -1395,18 +1373,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 				}
 				z80->halted = true;
 				z80->noni = 0;
-				if(z80->iff1 != 0 && (sms->vdp.irq_out&sms->vdp.irq_mask) != 0) {
-					/*
-					printf("IN_IRQ HALT %d %d %02X %02X %02X %016llX\n"
-						, z80->noni
-						, z80->iff1
-						, sms->vdp.irq_out
-						, sms->vdp.irq_mask
-						, sms->vdp.status
-						, (unsigned long long)z80->H.timestamp
-						);
-					*/
-
+				if(z80->iff1 != 0 && Z80_INT_CHECK) {
 					Z80NAME(irq)(z80, Z80_STATE_ARGS, 0xFF);
 					continue;
 				} else {
@@ -2358,7 +2325,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 	}
 }
 
-void Z80NAME(init)(struct SMSGlobal *G, struct Z80 *z80)
+void Z80NAME(init)(struct EmuGlobal *H, struct Z80 *z80)
 {
 	*z80 = (struct Z80){ .H={.timestamp=0,}, };
 	Z80NAME(reset)(z80);

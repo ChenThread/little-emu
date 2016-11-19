@@ -1,5 +1,3 @@
-#define PSG_OUT_BUF_LEN (1<<24)
-
 struct PSG
 {
 	struct EmuState H;

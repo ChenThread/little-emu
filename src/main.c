@@ -16,8 +16,7 @@
 #include <SDL.h>
 #endif
 
-// TODO: get more than one thing working (needs API!)
-#include "system/sms/all.h"
+#include "littleemu.h"
 
 void *botlib = NULL;
 void (*botlib_init)(struct EmuGlobal *G, int argc, char *argv[]) = NULL;
@@ -184,7 +183,7 @@ int main(int argc, char *argv[])
 		*/
 
 		uint64_t tnow = time_now();
-		Gbase->twait += FRAME_WAIT;
+		Gbase->twait += lemu_frame_wait_get();
 		if(Gbase->no_draw) {
 			Gbase->twait = tnow;
 		} else {
