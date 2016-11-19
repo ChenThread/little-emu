@@ -24,6 +24,16 @@ static uint32_t m68k_read_32(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr
 	return (val_h<<16)|(val_l&0xFFFF);
 }
 
+static void m68k_write_8(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr, uint8_t val)
+{
+	uint16_t aval = val;
+	aval *= 0x0101;
+	uint16_t amask = (0xFF00>>((addr&1)<<3));
+	M68KNAME(mem_write)(M68K_STATE_ARGS, m68k->H.timestamp, addr, aval, amask);
+	M68K_ADD_CYCLES(m68k, 4);
+}
+
+
 static uint16_t m68k_fetch_op_16(struct M68K *m68k, M68K_STATE_PARAMS)
 {
 	uint16_t op = m68k_read_16(m68k, M68K_STATE_ARGS, m68k->pc);
@@ -43,7 +53,34 @@ void M68KNAME(irq)(struct M68K *m68k, M68K_STATE_PARAMS)
 	// TODO!
 }
 
-static bool m68k_allow_ea(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, uint32_t allowed)
+static bool m68k_cc4_true(struct M68K *m68k, int cond)
+{
+	bool base_cond = ((cond&1) == 0);
+	switch(cond>>1) {
+		case 0x0: // T (F)
+			return base_cond == (true);
+		case 0x1: // HI (LS)
+			return base_cond == ((m68k->sr&(F_C|F_Z))==0);
+		case 0x2: // CC (CS)
+			return base_cond == ((m68k->sr&F_C)==0);
+		case 0x3: // NE (EQ)
+			return base_cond == ((m68k->sr&F_Z)==0);
+		case 0x4: // VC (VS)
+			return base_cond == ((m68k->sr&F_V)==0);
+		case 0x5: // PL (MI)
+			return base_cond == ((m68k->sr&F_N)==0);
+		case 0x6: // GE (LT)
+			return base_cond == (((m68k->sr&F_N)==0)==((m68k->sr&F_V)==0));
+		case 0x7: // GT (LE)
+			return base_cond == (((m68k->sr&F_N)==0)==((m68k->sr&F_V)==0)
+				&&(m68k->sr&F_Z)==0);
+		default:
+			assert(!"unreachable");
+			return false;
+	}
+}
+
+static bool m68k_allow_ea(struct M68K *m68k, uint32_t eavals, uint32_t allowed)
 {
 	//uint32_t ea_mode = (eavals>>3)&7;
 	//uint32_t ea_reg = eavals&7;
@@ -51,7 +88,7 @@ static bool m68k_allow_ea(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals,
 	return true;
 }
 
-static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
+static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, int size_bytes)
 {
 	uint32_t ea_mode = (eavals>>3)&7;
 	uint32_t ea_reg = eavals&7;
@@ -90,8 +127,13 @@ static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 			case 0x1: // (xxx).L
 				m68k->last_ea = m68k_fetch_op_32(m68k, M68K_STATE_ARGS);
 				break;
+			case 0x4: // #xxx
+				m68k->last_ea = m68k->pc;
+				m68k->pc += size_bytes;
+				break;
+
 			default:
-				assert(!"this does not exist in the original 68000 (TODO: CPU exception)");
+				assert(!"missing ext EA");
 				break;
 		} break;
 	}
@@ -101,7 +143,7 @@ static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 
 static uint8_t m68k_ea_read_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals)) {
+	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 2)) {
 		// had EA
 		return m68k_read_16(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
@@ -114,28 +156,64 @@ static uint8_t m68k_ea_read_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 
 static uint16_t m68k_ea_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals)) {
+	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 2)) {
 		// had EA
 		return m68k_read_16(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
 	} else {
 		// only had reg
 		return m68k->last_non_ea;
-
 	}
 }
 
 static uint16_t m68k_ea_read_32(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals)) {
+	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 4)) {
 		// had EA
 		return m68k_read_32(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
 	} else {
 		// only had reg
 		return m68k->last_non_ea;
-
 	}
+}
+
+static void m68k_grp_0x1(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
+{
+	//printf("%08X: %04X (grp 0x1 move.b)\n", m68k->pc-2, op);
+	uint8_t val = m68k_ea_read_8(m68k, M68K_STATE_ARGS, op&0x3F);
+	//printf("read %02X\n", val);
+	// TODO: block out #imm and later mode 7 EAs as a dest EA
+	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, (op>>6)&0x3F, 2)) {
+		m68k_write_8(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
+
+	} else if(((op>>9)&0x6) == 0) {
+		m68k->rd[(op>>6)&0x7] &= ~0xFF;
+		m68k->rd[(op>>6)&0x7] |= val;
+
+	} else {
+		assert(!"expected D reg for move dest");
+	}
+	//m68k->halted = 1;
+	//m68k->H.timestamp = m68k->H.timestamp_end;
+}
+
+static void m68k_grp_0x2(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
+{
+	printf("%08X: %04X (grp 0x2 move.l)\n", m68k->pc-2, op);
+	uint32_t val = m68k_ea_read_32(m68k, M68K_STATE_ARGS, op&0x3F);
+	printf("read %08X\n", val);
+	m68k->halted = 1;
+	m68k->H.timestamp = m68k->H.timestamp_end;
+}
+
+static void m68k_grp_0x3(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
+{
+	printf("%08X: %04X (grp 0x3 move.w)\n", m68k->pc-2, op);
+	uint16_t val = m68k_ea_read_16(m68k, M68K_STATE_ARGS, op&0x3F);
+	printf("read %04X\n", val);
+	m68k->halted = 1;
+	m68k->H.timestamp = m68k->H.timestamp_end;
 }
 
 static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
@@ -190,40 +268,55 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 		// TODO: movem
 
 	} else switch((op>>9)&7) {
-		case 0x5: {
-			switch((op>>6)&3) {
-				case 0x0: {
-					// TST.b
-					uint8_t val = m68k_ea_read_8(m68k, M68K_STATE_ARGS, op&0x3F);
-					m68k->sr &= ~(F_N|F_Z|F_V|F_C);
-					m68k->sr |= ((val&0x80) != 0 ? F_N : 0);
-					m68k->sr |= (val == 0 ? F_Z : 0);
-				} break;
+		case 0x3: switch((op>>6)&3) {
+			case 0x3: {
+				assert(((op>>3)&7) != 1); // TODO make this a cpu trap instead
+				uint16_t val = m68k_ea_read_16(m68k, M68K_STATE_ARGS, op&0x3F);
+				assert((m68k->sr&0x2000) != 0); // TODO trap instead
+				m68k->sr = val;
+			} break;
 
-				case 0x1: {
-					// TST.w
-					uint16_t val = m68k_ea_read_16(m68k, M68K_STATE_ARGS, op&0x3F);
-					m68k->sr &= ~(F_N|F_Z|F_V|F_C);
-					m68k->sr |= ((val&0x8000) != 0 ? F_N : 0);
-					m68k->sr |= (val == 0 ? F_Z : 0);
-				} break;
+			default: {
+				printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
+				printf("not.S op\n");
+				m68k->halted = 1;
+				m68k->H.timestamp = m68k->H.timestamp_end;
+			} break;
 
-				case 0x2: {
-					// TST.l
-					uint32_t val = m68k_ea_read_32(m68k, M68K_STATE_ARGS, op&0x3F);
-					m68k->sr &= ~(F_N|F_Z|F_V|F_C);
-					m68k->sr |= ((val&0x80000000) != 0 ? F_N : 0);
-					m68k->sr |= (val == 0 ? F_Z : 0);
-				} break;
+		} break;
 
-				case 0x3: {
-					// TAS
-					printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
-					printf("TAS op\n");
-					m68k->halted = 1;
-					m68k->H.timestamp = m68k->H.timestamp_end;
-				} break;
-			}
+		case 0x5: switch((op>>6)&3) {
+			case 0x0: {
+				// TST.b
+				uint8_t val = m68k_ea_read_8(m68k, M68K_STATE_ARGS, op&0x3F);
+				m68k->sr &= ~(F_N|F_Z|F_V|F_C);
+				m68k->sr |= ((val&0x80) != 0 ? F_N : 0);
+				m68k->sr |= (val == 0 ? F_Z : 0);
+			} break;
+
+			case 0x1: {
+				// TST.w
+				uint16_t val = m68k_ea_read_16(m68k, M68K_STATE_ARGS, op&0x3F);
+				m68k->sr &= ~(F_N|F_Z|F_V|F_C);
+				m68k->sr |= ((val&0x8000) != 0 ? F_N : 0);
+				m68k->sr |= (val == 0 ? F_Z : 0);
+			} break;
+
+			case 0x2: {
+				// TST.l
+				uint32_t val = m68k_ea_read_32(m68k, M68K_STATE_ARGS, op&0x3F);
+				m68k->sr &= ~(F_N|F_Z|F_V|F_C);
+				m68k->sr |= ((val&0x80000000) != 0 ? F_N : 0);
+				m68k->sr |= (val == 0 ? F_Z : 0);
+			} break;
+
+			case 0x3: {
+				// TAS
+				printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
+				printf("TAS op\n");
+				m68k->halted = 1;
+				m68k->H.timestamp = m68k->H.timestamp_end;
+			} break;
 		} break;
 
 		default:
@@ -238,12 +331,38 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 static void m68k_grp_0x6(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 {
 	// Branches
-	switch((op>>8)&0xF) {
-		default:
-			printf("%08X: %04X (grp 0x6 branches)\n", m68k->pc-2, op);
-			m68k->halted = 1;
-			m68k->H.timestamp = m68k->H.timestamp_end;
-			return;
+	// TODO: find out BSR memory access order
+	// TODO: find out if second word is read even on failure
+	int cond = (op>>8)&0xF;
+	uint32_t offs = (uint32_t)(int32_t)(int8_t)(op&0xFF);
+	bool is_bsr = (cond == 1);
+	bool is_word_offs = (offs == 0);
+	bool cond_pass = (is_bsr || m68k_cc4_true(m68k, cond));
+
+	// TODO: BSR
+	if(is_bsr) {
+		printf("%08X: %04X (BSR, grp 0x6 branches)\n", m68k->pc-2, op);
+		m68k->halted = 1;
+		m68k->H.timestamp = m68k->H.timestamp_end;
+		return;
+	}
+
+	if(is_word_offs) {
+		offs = (uint32_t)(int32_t)(int8_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+	}
+
+	if(cond_pass) {
+		m68k->pc += offs;
+		assert((m68k->pc&1) == 0);
+
+		if(is_word_offs) {
+			M68K_ADD_CYCLES(m68k, 2);
+		} else {
+			M68K_ADD_CYCLES(m68k, 6);
+		}
+
+	} else {
+		M68K_ADD_CYCLES(m68k, 4);
 	}
 }
 
@@ -291,6 +410,18 @@ void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 		//lstamp = m68k->H.timestamp;
 		uint16_t op = m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
 		switch(op>>12) {
+			case 0x1:
+				m68k_grp_0x1(m68k, M68K_STATE_ARGS, op);
+				break;
+
+			case 0x2:
+				m68k_grp_0x2(m68k, M68K_STATE_ARGS, op);
+				break;
+
+			case 0x3:
+				m68k_grp_0x3(m68k, M68K_STATE_ARGS, op);
+				break;
+
 			case 0x4:
 				m68k_grp_0x4(m68k, M68K_STATE_ARGS, op);
 				break;
