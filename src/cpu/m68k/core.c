@@ -353,8 +353,12 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 		m68k->halted = 1;
 		m68k->H.timestamp = m68k->H.timestamp_end;
 
-	} else if(false) {
-		// TODO: movem
+	} else if((op&~0x47F) == 0x4880) {
+		// MOVEM
+		printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
+		printf("movem ops\n");
+		m68k->halted = 1;
+		m68k->H.timestamp = m68k->H.timestamp_end;
 
 	} else switch((op>>9)&7) {
 		case 0x3: switch((op>>6)&3) {
