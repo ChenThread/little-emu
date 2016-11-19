@@ -1,6 +1,11 @@
 #!/bin/sh
-./dbuild.sh && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o libittle-emu.so \
+CC="gcc -std=gnu99 -O2"
+if [ "$1" != "" ]; then
+	CC="$1"
+fi
+
+./dbuild.sh "${CC}" && \
+${CC} -g -shared -fPIC -o libittle-emu.so \
 	-Isrc \
 	-Isrc/system/sms \
 	\
@@ -8,17 +13,17 @@ gcc -std=gnu99 -O2 -g -shared -fPIC -o libittle-emu.so \
 	src/core.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -o lemu -Isrc src/main.c -L. -Wl,-rpath,. -little-emu \
+${CC} -g -o lemu -Isrc src/main.c -L. -Wl,-rpath,. -little-emu \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/s1.so -Isrc bots/s1.c \
+${CC} -g -shared -fPIC -o lbots/s1.so -Isrc bots/s1.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/s2.so -Isrc bots/s2.c \
+${CC} -g -shared -fPIC -o lbots/s2.so -Isrc bots/s2.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/tas.so -Isrc bots/tas.c \
+${CC} -g -shared -fPIC -o lbots/tas.so -Isrc bots/tas.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/corrupt.so -Isrc bots/corrupt.c \
+${CC} -g -shared -fPIC -o lbots/corrupt.so -Isrc bots/corrupt.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
-gcc -std=gnu99 -O2 -g -shared -fPIC -o lbots/net.so -Isrc bots/net.c \
+${CC} -g -shared -fPIC -o lbots/net.so -Isrc bots/net.c \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 true
 
