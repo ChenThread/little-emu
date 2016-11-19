@@ -126,15 +126,16 @@ static bool m68k_ea_calc(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, 
 			break;
 		case 0x3: // (An)+
 			m68k->last_ea = m68k->ra[ea_reg];
-			m68k->ra[ea_reg] += 2;
+			m68k->ra[ea_reg] += size_bytes;
 			break;
 		case 0x4: // -(An)
 			M68K_ADD_CYCLES(m68k, 2);
-			m68k->ra[ea_reg] -= 2;
+			m68k->ra[ea_reg] -= size_bytes;
 			m68k->last_ea = m68k->ra[ea_reg];
 			break;
 		case 0x5: // (d16,An)
-			assert(!"HALP (d16,An)");
+			m68k->last_ea = (uint32_t)(int32_t)(int16_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+			m68k->last_ea += m68k->ra[ea_reg];
 			break;
 		case 0x6: // (d8,An,Xn)
 			assert(!"HALP (d8,An,Xn)");
@@ -154,7 +155,7 @@ static bool m68k_ea_calc(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, 
 				break;
 			case 0x4: // #xxx
 				m68k->last_ea = m68k->pc;
-				m68k->pc += size_bytes;
+				m68k->pc += ((size_bytes+0x1)&~0x1);
 				break;
 
 			default:
@@ -355,8 +356,105 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 	} else if((op&~0x47F) == 0x4880) {
 		// MOVEM
+		bool movem_read_memory = ((op&(1<<10)) != 0);
+		bool movem_is_long = ((op&(1<<6)) != 0);
+
+		// mask is read before EA
+		uint16_t movem_mask = m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+
+		// Order: LSB to MSB
+		// Postinc / Flat: 0 = D0
+		// Predec (only available when movem_read_memory is false): 0 = A7
+
+		// Get popcount
+		int pcnt = 0;
+		for(int i = 0; i < 16; i++) {
+			if((movem_mask&(1<<i)) != 0) {
+				pcnt++;
+			}
+		}
+
+		if(movem_read_memory) {
+			// mem reads are 4 cycles slower
+			M68K_ADD_CYCLES(m68k, 4);
+			if(!m68k_allow_ea(m68k, (op&0x3F), 0x07EC)) {
+				assert(!"invalid source EA");
+			}
+
+			if(movem_is_long) {
+				m68k_ea_calc(m68k, M68K_STATE_ARGS, (op&0x3F), 4*pcnt);
+
+				uint32_t addr = m68k->last_ea;
+
+				for(int i = 0; i < 8; i++) {
+					if((movem_mask&(0x0001<<i)) != 0) {
+						m68k->rd[i] = m68k_read_32(m68k, M68K_STATE_ARGS, addr);
+						addr += 4;
+					}
+				}
+				for(int i = 0; i < 8; i++) {
+					if((movem_mask&(0x0100<<i)) != 0) {
+						m68k->ra[i] = m68k_read_32(m68k, M68K_STATE_ARGS, addr);
+						addr += 4;
+					}
+				}
+
+				return;
+
+			} else {
+				m68k_ea_calc(m68k, M68K_STATE_ARGS, (op&0x3F), 2*pcnt);
+				uint32_t addr = m68k->last_ea;
+
+				for(int i = 0; i < 8; i++) {
+					if((movem_mask&(0x0001<<i)) != 0) {
+						m68k->rd[i] &= ~0xFFFF;
+						m68k->rd[i] |= m68k_read_16(m68k, M68K_STATE_ARGS, addr);
+						addr += 2;
+					}
+				}
+				for(int i = 0; i < 8; i++) {
+					if((movem_mask&(0x0100<<i)) != 0) {
+						m68k->ra[i] &= ~0xFFFF;
+						m68k->ra[i] |= m68k_read_16(m68k, M68K_STATE_ARGS, addr);
+						addr += 2;
+					}
+				}
+
+				return;
+			}
+
+		} else {
+			printf("WRITE\n");
+			bool movem_is_predec = (((op>>3)&0x7) == 4);
+
+			if(!m68k_allow_ea(m68k, (op&0x3F), 0x03F4)) {
+				assert(!"invalid dest EA");
+			}
+
+			if(movem_is_predec) {
+				if(movem_is_long) {
+					//
+				} else {
+					//
+				}
+
+			} else {
+				if(movem_is_long) {
+					m68k_ea_calc(m68k, M68K_STATE_ARGS, (op&0x3F), 4*pcnt);
+				} else {
+					m68k_ea_calc(m68k, M68K_STATE_ARGS, (op&0x3F), 2*pcnt);
+				}
+
+			}
+			// TODO: remainder of this thing
+		}
+
 		printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
-		printf("movem ops\n");
+		printf("movem ops %d %d %04X\n"
+			, movem_read_memory ? 1 : 0
+			, movem_is_long ? 1 : 0
+			, movem_mask
+			);
 		m68k->halted = 1;
 		m68k->H.timestamp = m68k->H.timestamp_end;
 
