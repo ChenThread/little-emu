@@ -7,11 +7,19 @@ fi
 ./dbuild.sh "${CC}" && \
 ${CC} -g -shared -fPIC -o libittle-emu.so \
 	-Isrc \
-	-Isrc/system/sms \
 	\
 	src/system/sms/*.c \
 	src/core.c \
 	\
+	`sdl2-config --cflags --libs` -lm -Wall && \
+${CC} -g -shared -fPIC -o libittle-emu-md.so \
+	-Isrc \
+	\
+	src/system/md/*.c \
+	src/core.c \
+	\
+	`sdl2-config --cflags --libs` -lm -Wall && \
+${CC} -g -o lmd -Isrc src/main.c -L. -Wl,-rpath,. -little-emu-md \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 ${CC} -g -o lemu -Isrc src/main.c -L. -Wl,-rpath,. -little-emu \
 	`sdl2-config --cflags --libs` -lm -Wall && \

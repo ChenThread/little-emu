@@ -339,7 +339,7 @@ void Z80NAME(run)(struct Z80 *z80, Z80_STATE_PARAMS, uint64_t timestamp)
 	// Run ops
 	uint64_t lstamp = z80->H.timestamp;
 	z80->H.timestamp_end = timestamp;
-	while(z80->H.timestamp < z80->H.timestamp_end) {
+	while(TIME_IN_ORDER(z80->H.timestamp, z80->H.timestamp_end)) {
 		//if(false && z80->pc != 0x215A) {
 		if(false) {
 			printf("%020lld: %04X: %02X: A=%02X SP=%04X\n"
