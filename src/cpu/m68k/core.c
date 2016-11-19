@@ -7,7 +7,7 @@ void M68KNAME(reset)(struct M68K *m68k)
 	m68k->needs_reset = 1;
 }
 
-static uint16_t m68k_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr)
+static uint16_t m68k_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr)
 {
 	uint16_t val = M68KNAME(mem_read)(M68K_STATE_ARGS, m68k->H.timestamp, addr);
 	if((addr&1) != 0) {
@@ -17,14 +17,14 @@ static uint16_t m68k_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr
 	return val;
 }
 
-static uint32_t m68k_read_32(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr)
+static uint32_t m68k_read_32(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr)
 {
 	uint32_t val_h = m68k_read_16(m68k, M68K_STATE_ARGS, addr+0);
 	uint32_t val_l = m68k_read_16(m68k, M68K_STATE_ARGS, addr+2);
 	return (val_h<<16)|(val_l&0xFFFF);
 }
 
-static void m68k_write_8(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr, uint8_t val)
+static void m68k_write_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr, uint8_t val)
 {
 	uint16_t aval = val;
 	aval *= 0x0101;
@@ -33,6 +33,22 @@ static void m68k_write_8(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t addr, ui
 	M68K_ADD_CYCLES(m68k, 4);
 }
 
+static void m68k_write_16(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr, uint16_t val)
+{
+	uint16_t aval = val;
+	if((addr&1) != 0) {
+		aval = (aval<<8)|(aval>>8);
+	}
+	uint16_t amask = 0xFFFF;
+	M68KNAME(mem_write)(M68K_STATE_ARGS, m68k->H.timestamp, addr, aval, amask);
+	M68K_ADD_CYCLES(m68k, 4);
+}
+
+static void m68k_write_32(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr, uint32_t val)
+{
+	m68k_write_16(m68k, M68K_STATE_ARGS, addr+0, (uint16_t)(val>>16));
+	m68k_write_16(m68k, M68K_STATE_ARGS, addr+2, (uint16_t)val);
+}
 
 static uint16_t m68k_fetch_op_16(struct M68K *m68k, M68K_STATE_PARAMS)
 {
@@ -88,7 +104,7 @@ static bool m68k_allow_ea(struct M68K *m68k, uint32_t eavals, uint32_t allowed)
 	return true;
 }
 
-static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, int size_bytes)
+static bool m68k_ea_calc(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals, int size_bytes)
 {
 	uint32_t ea_mode = (eavals>>3)&7;
 	uint32_t ea_reg = eavals&7;
@@ -127,6 +143,10 @@ static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 			case 0x1: // (xxx).L
 				m68k->last_ea = m68k_fetch_op_32(m68k, M68K_STATE_ARGS);
 				break;
+			case 0x2: // (d16,PC)
+				m68k->last_ea = (uint32_t)(int32_t)(int16_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+				m68k->last_ea += m68k->pc-2;
+				break;
 			case 0x4: // #xxx
 				m68k->last_ea = m68k->pc;
 				m68k->pc += size_bytes;
@@ -143,7 +163,7 @@ static bool m68k_ea_read_base(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 
 static uint8_t m68k_ea_read_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 2)) {
+	if(m68k_ea_calc(m68k, M68K_STATE_ARGS, eavals, 2)) {
 		// had EA
 		return m68k_read_16(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
@@ -156,7 +176,7 @@ static uint8_t m68k_ea_read_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eav
 
 static uint16_t m68k_ea_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 2)) {
+	if(m68k_ea_calc(m68k, M68K_STATE_ARGS, eavals, 2)) {
 		// had EA
 		return m68k_read_16(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
@@ -168,7 +188,7 @@ static uint16_t m68k_ea_read_16(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t e
 
 static uint16_t m68k_ea_read_32(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t eavals)
 {
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, eavals, 4)) {
+	if(m68k_ea_calc(m68k, M68K_STATE_ARGS, eavals, 4)) {
 		// had EA
 		return m68k_read_32(m68k, M68K_STATE_ARGS, m68k->last_ea);
 
@@ -184,7 +204,7 @@ static void m68k_grp_0x1(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	uint8_t val = m68k_ea_read_8(m68k, M68K_STATE_ARGS, op&0x3F);
 	//printf("read %02X\n", val);
 	// TODO: block out #imm and later mode 7 EAs as a dest EA
-	if(m68k_ea_read_base(m68k, M68K_STATE_ARGS, (op>>6)&0x3F, 2)) {
+	if(m68k_ea_calc(m68k, M68K_STATE_ARGS, (op>>6)&0x3F, 2)) {
 		m68k_write_8(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
 	} else if(((op>>9)&0x6) == 0) {
@@ -261,8 +281,22 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	// . - 4100 0FBF = chk
 	// 
 
-	if(false) {
-		// TODO: lea, chk
+	if((op&~0xE3F) == 0x41C0) {
+		// LEA
+		// TODO: suppress -(An), (An)+, #data
+		if(!m68k_ea_calc(m68k, M68K_STATE_ARGS, (op&0x3F), 4)) {
+			printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
+			assert(!"unexpected source EA for LEA");
+		}
+		uint32_t ea = m68k->last_ea;
+		m68k->ra[(op>>9)&7] = ea;
+
+	} else if((op&~0xFBF) == 0x4100) {
+		// CHK
+		printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
+		printf("chk ops\n");
+		m68k->halted = 1;
+		m68k->H.timestamp = m68k->H.timestamp_end;
 
 	} else if(false) {
 		// TODO: movem
