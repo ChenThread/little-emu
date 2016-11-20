@@ -26,7 +26,7 @@ static cpu_6502_opcode* cpu_6502_opcodes[] = {
 	cpu_6502_rts, cpu_6502_adc_zpindx, cpu_6502_hlt, cpu_6502i_rra_zpindx, // 60
 	cpu_6502_nop_zp, cpu_6502_adc_zp, cpu_6502_ror_zp, cpu_6502i_rra_zp, // 64
 	cpu_6502_pla, cpu_6502_adc_imm, cpu_6502_ror_ra, cpu_6502i_arr_imm, // 68
-	cpu_6502_jmp_ind, cpu_6502_adc_abs, cpu_6502_ror_abs, cpu_6502i_rra_abs, // 6C
+	cpu_6502_jmp_ind_page, cpu_6502_adc_abs, cpu_6502_ror_abs, cpu_6502i_rra_abs, // 6C
 	cpu_6502_bvs, cpu_6502_adc_zpindy, cpu_6502_hlt, cpu_6502i_rra_zpindy, // 70
 	cpu_6502_nop_zpx, cpu_6502_adc_zpx, cpu_6502_ror_zpx, cpu_6502i_rra_zpx, // 74
 	cpu_6502_sei, cpu_6502_adc_absy, cpu_6502_nop, cpu_6502i_rra_absy, // 78

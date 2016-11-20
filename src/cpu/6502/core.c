@@ -68,7 +68,7 @@ static inline uint16_t cpu_6502_read_mem_word(CPU_STATE_PARAMS, uint16_t addr) {
 	return low | (cpu_6502_read_mem(CPU_MEMORY_ARGS, addr+1) << 8);
 }
 
-static inline uint16_t cpu_6502_read_mem_word_page(CPU_STATE_PARAMS, uint8_t addr) {
+static inline uint16_t cpu_6502_read_mem_word_page(CPU_STATE_PARAMS, uint16_t addr) {
 	uint8_t low = cpu_6502_read_mem(CPU_MEMORY_ARGS, addr);
 	return low | (cpu_6502_read_mem(CPU_MEMORY_ARGS, ((addr+1) & 0xFF) | (addr & 0xFF00)) << 8);
 }
@@ -78,7 +78,7 @@ static inline uint16_t cpu_6502_read_mem_word_cycled(CPU_STATE_PARAMS, uint16_t 
 	return low | (cpu_6502_read_mem_cycled(CPU_STATE_ARGS, addr+1) << 8);
 }
 
-static inline uint16_t cpu_6502_read_mem_word_cycled_page(CPU_STATE_PARAMS, uint8_t addr) {
+static inline uint16_t cpu_6502_read_mem_word_cycled_page(CPU_STATE_PARAMS, uint16_t addr) {
 	uint8_t low = cpu_6502_read_mem_cycled(CPU_STATE_ARGS, addr);
 	return low | (cpu_6502_read_mem_cycled(CPU_STATE_ARGS, ((addr+1) & 0xFF) | (addr & 0xFF00)) << 8);
 }
@@ -111,7 +111,7 @@ void cpu_6502_run(CPU_STATE_PARAMS, uint64_t timestamp) {
 	state->H.timestamp_end = timestamp;
 	while(TIME_IN_ORDER(state->H.timestamp, state->H.timestamp_end)) {
 		uint8_t op = cpu_6502_next_cycled(CPU_STATE_ARGS);
-		printf("%04X [%02X]: A%02X X%02X Y%02X SP%02X F%02X C2=%02X\n", state->pc, op, state->ra, state->rx, state->ry, state->sp, state->flag, Hstate->ram[0xC2]);
+		printf("%04X [%02X]: A%02X X%02X Y%02X SP%02X F%02X\n", state->pc, op, state->ra, state->rx, state->ry, state->sp, state->flag);
 		cpu_6502_opcode* ophdl = cpu_6502_opcodes[op];
 		ophdl(CPU_STATE_ARGS);
 	}

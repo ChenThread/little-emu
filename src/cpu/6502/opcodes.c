@@ -47,6 +47,10 @@ static inline uint16_t cpu_6502_addr_ind(CPU_STATE_PARAMS, bool ignore_page_boun
 	return cpu_6502_read_mem_word_cycled(CPU_STATE_ARGS, cpu_6502_next_word_cycled(CPU_STATE_ARGS));
 }
 
+static inline uint16_t cpu_6502_addr_ind_page(CPU_STATE_PARAMS, bool ignore_page_boundary) {
+	return cpu_6502_read_mem_word_cycled_page(CPU_STATE_ARGS, cpu_6502_next_word_cycled(CPU_STATE_ARGS));
+}
+
 static inline uint16_t cpu_6502_addr_zpindx(CPU_STATE_PARAMS, bool ignore_page_boundary) {
 	uint8_t addr = (cpu_6502_next_cycled(CPU_STATE_ARGS) + state->rx) & 0xFF;
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
@@ -81,7 +85,7 @@ static inline uint16_t cpu_6502_addr_zpind(CPU_STATE_PARAMS, bool ignore_page_bo
 #define CPU_FUNC_TRANSFER(name, from, to) \
 	static void cpu_##name(CPU_STATE_PARAMS) { \
 		CPU_ADD_CYCLES(CPU_STATE_ARGS, 1); \
-		(to) = (from); CPU_UPDATE_NZ((to)); \
+		CPU_UPDATE_NZ((from)); (to) = (from); \
 	}
 
 #define CPU_FUNC_SETFLAG(name, v) \
@@ -187,13 +191,21 @@ CPU_FUNC_TRANSFER(6502_tax, state->ra, state->rx);
 CPU_FUNC_TRANSFER(6502_tay, state->ra, state->ry);
 CPU_FUNC_TRANSFER(6502_tsx, state->sp, state->rx);
 CPU_FUNC_TRANSFER(6502_txa, state->rx, state->ra);
-CPU_FUNC_TRANSFER(6502_txs, state->rx, state->sp);
 CPU_FUNC_TRANSFER(6502_tya, state->ry, state->ra);
+
+static void cpu_6502_txs(CPU_STATE_PARAMS) {
+	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
+	state->sp = state->rx;
+}
 
 CPU_FUNC_PUSH(6502_pha, state->ra);
 CPU_FUNC_PUSH(6502_php, state->flag);
 CPU_FUNC_POP(6502_pla, state->ra);
-CPU_FUNC_POP(6502_plp, state->flag);
+
+static void cpu_6502_plp(CPU_STATE_PARAMS) {
+	CPU_ADD_CYCLES(CPU_STATE_ARGS, 2);
+	state->flag = cpu_6502_pop_cycled(CPU_STATE_ARGS) | (1 << 5);
+}
 
 CPU_FUNC_BRANCH(6502_bcc, (state->flag & FLAG_C) == 0);
 CPU_FUNC_BRANCH(6502_bcs, (state->flag & FLAG_C) != 0);
@@ -257,6 +269,7 @@ static inline void cpu_6502_internal_adc(CPU_STATE_PARAMS, int8_t value) {
 			a += 0x60;
 		state->ra = a & 0xFF;
 		if (a >= 0x100) state->flag |= FLAG_C;
+		else state->flag &= ~FLAG_C;
 
 		// calculate V
 		a_v = (int8_t)(state->ra & 0xF0) + (int8_t)(value & 0xF0) + a_low;
@@ -270,16 +283,17 @@ static inline void cpu_6502_internal_adc(CPU_STATE_PARAMS, int8_t value) {
 
 		if ((state->flag) & FLAG_C) {
 			result += value + 1;
+			state->ra = result & 0xFF;
 			if (state->ra <= old_ra) { state->flag |= FLAG_C; }
 			else { state->flag &= ~(FLAG_C); }
 		} else {
 			result += value;
+			state->ra = result & 0xFF;
 			if (state->ra < old_ra) { state->flag |= FLAG_C; }
 			else { state->flag &= ~(FLAG_C); }
 		}
 
 		CPU_SET_V(result);
-		state->ra = result & 0xFF;
 	}
 }
 
@@ -300,6 +314,7 @@ static inline void cpu_6502_internal_sbc(CPU_STATE_PARAMS, int8_t value) {
 			a -= 0x60;
 		state->ra = a & 0xFF;
 		if ((a & 0x100)) state->flag |= FLAG_C;
+		else state->flag &= ~FLAG_C;
 		if (a < -128 || a > 127) state->flag |= FLAG_V; // TODO: verify
 	} else {
 #else
@@ -310,16 +325,17 @@ static inline void cpu_6502_internal_sbc(CPU_STATE_PARAMS, int8_t value) {
 
 		if ((state->flag) & FLAG_C) {
 			result -= value;
+			state->ra = result & 0xFF;
 			if (state->ra <= old_ra) { state->flag |= FLAG_C; }
 			else { state->flag &= ~(FLAG_C); }
 		} else {
 			result -= value + 1;
+			state->ra = result & 0xFF;
 			if (state->ra < old_ra) { state->flag |= FLAG_C; }
 			else { state->flag &= ~(FLAG_C); }
 		}
 
 		CPU_SET_V(result);
-		state->ra = result & 0xFF;
 	}
 }
 
@@ -360,6 +376,10 @@ static inline void cpu_6502_internal_sbc(CPU_STATE_PARAMS, int8_t value) {
 #include "opcodes_addressed.h"
 #undef CPU_ADDR_MODE
 #define CPU_ADDR_MODE ind
+#include "opcodes_addressed.h"
+
+#undef CPU_ADDR_MODE
+#define CPU_ADDR_MODE ind_page
 #include "opcodes_addressed.h"
 
 #undef CPU_ADDR_MODE

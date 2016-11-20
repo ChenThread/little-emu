@@ -21,7 +21,7 @@ CPU_FUNC(6502_nop) {
 CPU_FUNC(6502_adc) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
-	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C | FLAG_V);
+	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 
 	cpu_6502_internal_adc(CPU_STATE_ARGS, value);
 
@@ -32,7 +32,7 @@ CPU_FUNC(6502_adc) {
 CPU_FUNC(6502_sbc) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
-	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C | FLAG_V);
+	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 
 	cpu_6502_internal_sbc(CPU_STATE_ARGS, value);
 
@@ -186,9 +186,9 @@ CPU_FUNC(6502_rol) {
 	uint8_t result;
 
 	value = ((uint16_t) CPU_READ(addr)) << 1;
-	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
-
 	value |= (state->flag) & 0x1;
+
+	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
 	if (value & 0x100) { state->flag |= FLAG_C; }
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 
@@ -204,9 +204,9 @@ CPU_FUNC(6502_ror) {
 	uint8_t result;
 
 	value = CPU_READ(addr);
+	value |= ((uint16_t) (state->flag & 0x1) << 8);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
 
-	value |= (state->flag << 8) & 0x100;
 	if (value & 1) { state->flag |= FLAG_C; }
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 
@@ -280,7 +280,7 @@ CPU_FUNC(6502i_isc) {
 	value++;
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 
-	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z);
+	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 	CPU_WRITE(addr, value);
 
 	cpu_6502_internal_sbc(CPU_STATE_ARGS, value);
@@ -367,9 +367,9 @@ CPU_FUNC(6502i_rla) { // ROL + AND
 	uint8_t result;
 
 	value = ((uint16_t) CPU_READ(addr)) << 1;
-	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
-
 	value |= (state->flag) & 0x1;
+	
+	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
 	if (value & 0x100) { state->flag |= FLAG_C; }
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 	CPU_WRITE(addr, value);
@@ -399,9 +399,9 @@ CPU_FUNC(6502i_rra) { // ROR + ADC
 	uint8_t result;
 
 	value = CPU_READ(addr);
+	value |= ((uint16_t) (state->flag & 0x1) << 8);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C | FLAG_V);
 
-	value |= (state->flag << 8) & 0x100;
 	if (value & 1) { state->flag |= FLAG_C; }
 	result = value >> 1;
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
