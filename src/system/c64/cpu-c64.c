@@ -17,6 +17,12 @@ uint8_t cia1_read_port_a(struct CIA *cia, struct C64Global *H, struct C64 *state
 }
 
 uint8_t cia1_read_port_b(struct CIA *cia, struct C64Global *H, struct C64 *state, uint8_t rw_mask) {
+	cia->port_b_r = 0xFF;
+	for (int i = 0; i < 8; i++) {
+		if (!(cia->port_a_rw & (1 << i))) {
+			cia->port_b_r &= ~((state->key_matrix >> (i * 8)) & 0xFF);
+		}
+	}
 	return (cia->port_b_rw & rw_mask) | (cia->port_b_r & (~rw_mask));
 }
 
@@ -29,6 +35,7 @@ uint8_t cia2_read_port_b(struct CIA *cia, struct C64Global *H, struct C64 *state
 }
 
 void cia1_write_port_a(struct CIA *cia, struct C64Global *H, struct C64 *state, uint8_t rw_mask, uint8_t value) {
+	cia->port_a_rw = (value & rw_mask) | (cia->port_a_rw & (~rw_mask));
 }
 
 void cia1_write_port_b(struct CIA *cia, struct C64Global *H, struct C64 *state, uint8_t rw_mask, uint8_t value) {

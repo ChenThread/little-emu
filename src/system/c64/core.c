@@ -79,8 +79,8 @@ static void c64_init_global(struct C64Global *G, const char *fname, const void *
 			.chicken_pointer_count = 0,
 			.chicken_pointers = NULL,
 
-			.input_button_count = 5,
-			.player_count = 2,
+			.input_button_count = 64,
+			.player_count = 1,
 
 			.no_draw = false,
 		},
@@ -203,5 +203,13 @@ void lemu_core_video_callback(struct EmuGlobal *G, struct EmuSurface *S)
 
 void lemu_core_handle_input(struct EmuGlobal *G, void *state, int player_id, int input_id, bool down)
 {
-
+	struct C64* c64 = (struct C64*) state;
+	if (input_id < 64)
+		if (down)
+			c64->key_matrix |= ((uint64_t) 1 << input_id);
+		else
+			c64->key_matrix &= ~((uint64_t) 1 << input_id);
+	else {
+		// other keys
+	}
 }
