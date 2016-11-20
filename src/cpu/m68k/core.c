@@ -7,6 +7,26 @@ void M68KNAME(reset)(struct M68K *m68k)
 	m68k->needs_reset = 1;
 }
 
+static void m68k_set_sr(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t new_sr)
+{
+	uint16_t old_sr = m68k->sr;
+	m68k->sr = new_sr;
+
+	if((old_sr&0x2000) == 0 && (new_sr&0x2000) != 0) {
+		// entering supervisor mode
+		uint32_t t = m68k->ra[7];
+		m68k->ra[7] = m68k->usp_store;
+		m68k->usp_store = t;
+
+	} else if((old_sr&0x2000) != 0 && (new_sr&0x2000) == 0) {
+		// exiting supervisor mode
+		uint32_t t = m68k->ra[7];
+		m68k->ra[7] = m68k->usp_store;
+		m68k->usp_store = t;
+
+	}
+}
+
 static uint8_t m68k_read_8(struct M68K *m68k, M68K_STATE_PARAMS, uint32_t addr)
 {
 	uint16_t val = M68KNAME(mem_read)(M68K_STATE_ARGS, m68k->H.timestamp, addr);
@@ -363,9 +383,9 @@ static void m68k_grp_0x1(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(m68k_ea_calc_dst(m68k, M68K_STATE_ARGS, op, 1)) {
 		m68k_write_8(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
-	} else if(((op>>9)&0x6) == 0) {
-		m68k->rd[(op>>6)&0x7] &= ~0xFF;
-		m68k->rd[(op>>6)&0x7] |= val;
+	} else if(((op>>6)&0x6) == 0) {
+		m68k->rd[(op>>9)&0x7] &= ~0xFF;
+		m68k->rd[(op>>9)&0x7] |= val;
 
 	} else {
 		assert(!"expected D reg for move.b dest");
@@ -391,13 +411,13 @@ static void m68k_grp_0x3(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(m68k_ea_calc_dst(m68k, M68K_STATE_ARGS, op, 2)) {
 		m68k_write_16(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
-	} else if(((op>>9)&0x6) == 0) {
-		m68k->rd[(op>>6)&0x7] &= ~0xFFFF;
-		m68k->rd[(op>>6)&0x7] |= val;
+	} else if(((op>>6)&0x6) == 0) {
+		m68k->rd[(op>>9)&0x7] &= ~0xFFFF;
+		m68k->rd[(op>>9)&0x7] |= val;
 
 	} else {
 		assert(is_movea);
-		m68k->ra[(op>>6)&0x7] = (uint32_t)(int32_t)(int16_t)val;
+		m68k->ra[(op>>9)&0x7] = (uint32_t)(int32_t)(int16_t)val;
 		return; // skip flag change
 	}
 
@@ -421,12 +441,12 @@ static void m68k_grp_0x2(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(m68k_ea_calc_dst(m68k, M68K_STATE_ARGS, op, 4)) {
 		m68k_write_32(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
-	} else if(((op>>9)&0x6) == 0) {
-		m68k->rd[(op>>6)&0x7] = val;
+	} else if(((op>>6)&0x6) == 0) {
+		m68k->rd[(op>>9)&0x7] = val;
 
 	} else {
 		assert(is_movea);
-		m68k->ra[(op>>6)&0x7] = val;
+		m68k->ra[(op>>9)&0x7] = val;
 		return; // skip flag change
 	}
 
@@ -609,7 +629,7 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 				assert(((op>>3)&7) != 1); // TODO make this a cpu trap instead
 				uint16_t val = m68k_ea_read_16(m68k, M68K_STATE_ARGS, op);
 				assert((m68k->sr&0x2000) != 0); // TODO trap instead
-				m68k->sr = val;
+				m68k_set_sr(m68k, M68K_STATE_ARGS, val);
 			} break;
 
 			default: {
@@ -662,6 +682,30 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 				m68k->halted = 1;
 				m68k->H.timestamp = m68k->H.timestamp_end;
 			} break;
+		} break;
+
+		case 0x7: switch((op>>4)&0xF) { // Special snowflakes
+			case 0x06: {
+				assert((m68k->sr&0x2000)!=0);
+
+				uint32_t *usp = &(m68k->usp_store);
+
+				if((op&0x0008) == 0) {
+					// A->USP
+					*usp = m68k->ra[op&0x7];
+
+				} else {
+					// USP->A
+					m68k->ra[op&0x7] = *usp;
+
+				}
+			} break;
+
+			default:
+				printf("%08X: %04X (special snowflakes, grp 0x4)\n", m68k->pc-2, op);
+				m68k->halted = 1;
+				m68k->H.timestamp = m68k->H.timestamp_end;
+				break;
 		} break;
 
 		default:
@@ -733,7 +777,7 @@ void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 	// Apply reset if we requested it
 	if(m68k->needs_reset) {
 		// XXX: the timing here is a guess
-		m68k->sr = 0x2700;
+		m68k_set_sr(m68k, M68K_STATE_ARGS, 0x2700);
 		M68K_ADD_CYCLES(m68k, 4);
 		m68k->ra[7] = m68k_read_32(m68k, M68K_STATE_ARGS, 0);
 		m68k->pc = m68k_read_32(m68k, M68K_STATE_ARGS, 4);

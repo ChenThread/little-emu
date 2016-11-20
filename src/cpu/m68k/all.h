@@ -6,6 +6,7 @@ struct M68K
 	uint32_t rd[8];
 	uint32_t pc;
 	uint32_t last_ea, last_non_ea;
+	uint32_t usp_store;
 	uint16_t sr;
 
 	uint8_t halted;
