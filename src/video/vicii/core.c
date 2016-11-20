@@ -17,12 +17,12 @@ static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct
 	uint8_t data_byte;
 
 	if (x >= 0 && x < 320) {
-		color = vic->row_colors[x >> 3] & 0x0F;
+		color = vic->row_colors[x >> 3];
 		data_byte = vic->row_pixels[x >> 3];
 	}
 
 	if (color != 0xFF && (data_byte << (x & 7)) & 0x80) {
-		return color;
+		return color & 0x0F;
 	} else {
 		return vic->colors[vic->border_on ? VIC_BORDER_COLOR : VIC_BACKGROUND_COLOR];
 	}
@@ -36,12 +36,19 @@ static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C6
 			vic->row_colors[i] = 0xFF;
 		}
 	} else {
-		for (int i = 0; i < 40; i++) {
-			// char mode
-			uint8_t chr_ind = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0xF0) << 6) + i + ((y >> 3) * 40));
-			uint8_t data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x0E) << 10) + (chr_ind << 3) + (y & 7));
-			vic->row_pixels[i] = data_byte;
-			vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
+		if (vic->control1 & 0x20) { // bitmap read
+			for (int i = 0; i < 40; i++) {
+				uint8_t data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x08) << 10) + i + ((y >> 3) * 40));
+				vic->row_pixels[i] = data_byte;
+				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
+			}
+		} else { // char read
+			for (int i = 0; i < 40; i++) {
+				uint8_t chr_ind = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0xF0) << 6) + i + ((y >> 3) * 40));
+				uint8_t data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x0E) << 10) + (chr_ind << 3) + (y & 7));
+				vic->row_pixels[i] = data_byte;
+				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
+			}	
 		}
 	}
 };

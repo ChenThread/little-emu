@@ -29,7 +29,7 @@ void c64_init(struct C64Global *G, struct C64 *c64)
 	*c64 = (struct C64){
 		.H={.timestamp = 0,},
 		.cpu_io0 = 0xFF,
-		.cpu_io1 = 0xC3,
+		.cpu_io1 = 0xC7,
 		.key_matrix = 0,
 	};
 	cpu_6502_init(&(G->H), &(c64->H), &(c64->cpu));

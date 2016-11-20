@@ -42,6 +42,7 @@ void cia1_write_port_b(struct CIA *cia, struct C64Global *H, struct C64 *state, 
 }
 
 void cia2_write_port_a(struct CIA *cia, struct C64Global *H, struct C64 *state, uint8_t rw_mask, uint8_t value) {
+	cia->port_a_rw = (value & rw_mask) | (cia->port_a_rw & (~rw_mask));
 }
 
 void cia2_write_port_b(struct CIA *cia, struct C64Global *H, struct C64 *state, uint8_t rw_mask, uint8_t value) {

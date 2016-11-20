@@ -169,6 +169,9 @@ static inline void CIA_NAME(tick_b)(struct CIA *cia, struct C64Global *H, struct
 				cia->timer_b = cia->timer_b_latch;
 			else
 				cia->timer_b_ctrl &= 0xFE;
+
+			if (cia->timer_b_ctrl & 0x02)
+				cia->port_b_r |= 0x80;
 		} else cia->timer_b--;
 	}
 }
@@ -189,6 +192,9 @@ static inline void CIA_NAME(tick_a)(struct CIA *cia, struct C64Global *H, struct
 				cia->timer_a = cia->timer_a_latch;
 			else
 				cia->timer_a_ctrl &= 0xFE;
+
+			if (cia->timer_a_ctrl & 0x02)
+				cia->port_b_r |= 0x40;
 		} else cia->timer_a--;
 	}
 }
@@ -200,6 +206,12 @@ void CIA_NAME(run)(struct CIA *cia, struct C64Global *H, struct C64 *state, uint
 
 	cia->H.timestamp_end = timestamp;
 	while(TIME_IN_ORDER(cia->H.timestamp, cia->H.timestamp_end)) {
+		// Reset Timer A and B underflow flags if necessary
+		if (cia->timer_a_ctrl & 0x04)
+			cia->port_b_r &= ~0x40;
+		if (cia->timer_b_ctrl & 0x04)
+			cia->port_b_r &= ~0x80;
+		
 		// Timer A - tick
 		if (CIA_TIMER_A_RUNNING(cia)) {
 			CIA_NAME(tick_a)(cia, H, state);
