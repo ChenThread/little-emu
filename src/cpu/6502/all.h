@@ -12,4 +12,9 @@ struct CPU_6502
 	
 	uint8_t ra, rx, ry, sp, flag;
 	uint16_t pc;
+
+	bool irq_request, nmi_request;
 } __attribute__((__packed__));
+
+void cpu_6502_irq(struct CPU_6502 *state);
+void cpu_6502_nmi(struct CPU_6502 *state);

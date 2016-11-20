@@ -389,4 +389,6 @@ static inline void cpu_6502_internal_sbc(CPU_STATE_PARAMS, int8_t value) {
 #define CPU_ADDR_MODE zpind
 #include "opcodes_addressed.h"
 
+#undef CPU_ADDR_MODE
+
 #include "opcodes_tables.h"

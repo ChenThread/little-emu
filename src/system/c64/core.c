@@ -30,9 +30,12 @@ void c64_init(struct C64Global *G, struct C64 *c64)
 		.H={.timestamp = 0,},
 		.cpu_io0 = 0xFF,
 		.cpu_io1 = 0xC3,
+		.key_matrix = 0,
 	};
 	cpu_6502_init(&(G->H), &(c64->H), &(c64->cpu));
 	vic_init(&(G->H), &(c64->vic));
+	cia1_init(&(G->H), &(c64->cia1));
+	cia2_init(&(G->H), &(c64->cia2));
 }
 
 static void c64_bin_load(uint8_t* ptr, const char *fname, size_t len) {

@@ -6,6 +6,14 @@
 #define CPU_6502_RESET_ADDRESS 0xFFFC
 #endif
 
+#ifndef CPU_6502_NMI_ADDRESS
+#define CPU_6502_NMI_ADDRESS 0xFFFA
+#endif
+
+#ifndef CPU_6502_IRQ_ADDRESS
+#define CPU_6502_IRQ_ADDRESS 0xFFFE
+#endif
+
 #ifndef CPU_6502_CYCLE_MULTIPLIER
 #define CPU_6502_CYCLE_MULTIPLIER 1
 #endif
@@ -95,7 +103,6 @@ void cpu_6502_reset(CPU_STATE_PARAMS) {
 	state->flag = FLAG_I | (1 << 5);
 	state->sp = 0xFF;
 	state->pc = cpu_6502_read_mem_word(CPU_STATE_ARGS, CPU_6502_RESET_ADDRESS);
-	printf("%04X RESET\n", state->pc);
 }
 
 void cpu_6502_init(CPU_STATE_PARAMS) {
@@ -110,9 +117,31 @@ void cpu_6502_run(CPU_STATE_PARAMS, uint64_t timestamp) {
 
 	state->H.timestamp_end = timestamp;
 	while(TIME_IN_ORDER(state->H.timestamp, state->H.timestamp_end)) {
+		if (state->nmi_request) {
+			cpu_6502_push_word_cycled(CPU_STATE_ARGS, state->pc);
+			cpu_6502_push_cycled(CPU_STATE_ARGS, state->flag);
+			state->pc = cpu_6502_read_mem_word(CPU_STATE_ARGS, CPU_6502_NMI_ADDRESS);
+			state->nmi_request = state->irq_request = false;
+		} else if (state->irq_request && !(state->flag & FLAG_I)) {
+			cpu_6502_push_word_cycled(CPU_STATE_ARGS, state->pc);
+			cpu_6502_push_cycled(CPU_STATE_ARGS, state->flag);
+			state->pc = cpu_6502_read_mem_word(CPU_STATE_ARGS, CPU_6502_IRQ_ADDRESS);
+			state->irq_request = false;
+		}
+
 		uint8_t op = cpu_6502_next_cycled(CPU_STATE_ARGS);
+#ifdef CPU_6502_DEBUG
 		printf("%04X [%02X]: A%02X X%02X Y%02X SP%02X F%02X\n", state->pc, op, state->ra, state->rx, state->ry, state->sp, state->flag);
+#endif
 		cpu_6502_opcode* ophdl = cpu_6502_opcodes[op];
 		ophdl(CPU_STATE_ARGS);
 	}
+}
+
+void cpu_6502_irq(struct CPU_6502 *state) {
+	state->irq_request = true;
+}
+
+void cpu_6502_nmi(struct CPU_6502 *state) {
+	state->nmi_request = true;
 }
