@@ -17,10 +17,16 @@
 #define VIC_SPRITE_COLOR 0x7
 
 #define VIC_IRQ_RASTER (1 << 0)
+#define VIC_IRQ_COL_BG (1 << 1)
+#define VIC_IRQ_COL_SPRITE (1 << 2)
+#define VIC_IRQ_LIGHTPEN (1 << 3)
 
 struct VIC {
 	struct EmuState H;
 	int16_t raster_y, raster_x;
+
+	// debug data
+	int frame_counter;
 
 	// row data
 	uint8_t row_pixels[40];

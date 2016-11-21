@@ -28,12 +28,12 @@ void c64_init(struct C64Global *G, struct C64 *c64)
 {
 	*c64 = (struct C64){
 		.H={.timestamp = 0,},
-		.cpu_io0 = 0xFF,
-		.cpu_io1 = 0xC3,
+		.cpu_io0 = 0xEF,
+		.cpu_io1 = 0xC7,
 		.key_matrix = 0,
 	};
 
-	cpu_6502_init(&(G->H), &(c64->H), &(c64->cpu));
+	c64_6502_init(&(G->H), &(c64->H), &(c64->cpu));
 	vic_init(&(G->H), &(c64->vic));
 	cia1_init(&(G->H), &(c64->cia1));
 	cia2_init(&(G->H), &(c64->cia2));
@@ -120,17 +120,18 @@ static void c64_init_global(struct C64Global *G, const char *fname, const void *
 		.flags = 0,
 		.name = "Character ROM",
 	};
-	G->rom_heads[3] = (struct EmuRomHead){
-		.len = 0x4000,
-		.ptr = G->rom_cartridge,
-		.flags = 0,
-		.name = "Cartridge ROM",
-	};
 
 	c64_bin_load(G->rom_basic, "basic.901226-01.bin", 0x2000);
 	c64_bin_load(G->rom_kernal, "kernal.901227-03.bin", 0x2000);
 	c64_bin_load(G->rom_char, "characters.901225-01.bin", 0x1000);
 	c64_rom_load(G, fname, data, len);
+
+	G->rom_heads[3] = (struct EmuRomHead){
+		.len = G->rom_cartridge_present ? 0x4000 : 0,
+		.ptr = G->rom_cartridge,
+		.flags = 0,
+		.name = "Cartridge ROM",
+	};
 
 	c64_init(G, &(G->current));
 }
@@ -143,7 +144,7 @@ void c64_run(struct C64Global *G, struct C64 *c64, uint64_t timestamp)
 
 	while(TIME_IN_ORDER(c64->cpu.H.timestamp_end, timestamp)) {
 		c64->cpu.H.timestamp_end = timestamp;
-		cpu_6502_run(&(G->H), &(c64->H), &(c64->cpu), c64->cpu.H.timestamp_end);
+		c64_6502_run(&(G->H), &(c64->H), &(c64->cpu), c64->cpu.H.timestamp_end);
 	}
 
 	c64->H.timestamp = timestamp;

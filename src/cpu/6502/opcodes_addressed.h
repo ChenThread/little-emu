@@ -1,6 +1,6 @@
-#define CPU_FUNC_I(n, am) static void cpu_ ## n ## _ ## am(CPU_STATE_PARAMS)
-#define CPU_CALL_FUNC_I(n, am) cpu_ ## n ## _ ## am (CPU_STATE_ARGS)
-#define CPU_ADDR_I(am, ipb) cpu_6502_addr_##am(CPU_STATE_ARGS, ipb)
+#define CPU_FUNC_I(n, am) static void  CPU_6502_NAME(n ## _ ## am)(CPU_STATE_PARAMS)
+#define CPU_CALL_FUNC_I(n, am) CPU_6502_NAME(n) ## _ ## am (CPU_STATE_ARGS)
+#define CPU_ADDR_I(am, ipb) CPU_6502_NAME(addr_ ## am)(CPU_STATE_ARGS, ipb)
 
 #define CPU_FUNC_A(n, am) CPU_FUNC_I(n, am)
 #define CPU_CALL_FUNC_A(n, am) CPU_CALL_FUNC_I(n, am)
@@ -12,42 +12,42 @@
 
 // 6502 - normal opcodes
 
-CPU_FUNC(6502_nop) {
+CPU_FUNC(nop) {
 	// TODO: verify speeds (this is in for illegal variants)
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 }
 
-CPU_FUNC(6502_adc) {
+CPU_FUNC(adc) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 
-	cpu_6502_internal_adc(CPU_STATE_ARGS, value);
+	CPU_6502_NAME(internal_adc)(CPU_STATE_ARGS, value);
 
 	CPU_SET_N(state->ra);
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502_sbc) {
+CPU_FUNC(sbc) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 
-	cpu_6502_internal_sbc(CPU_STATE_ARGS, value);
+	CPU_6502_NAME(internal_sbc)(CPU_STATE_ARGS, value);
 
 	CPU_SET_N(state->ra);
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502_and) {
+CPU_FUNC(and) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	state->ra &= value;
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502_asl) {
+CPU_FUNC(asl) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value;
 
@@ -63,7 +63,7 @@ CPU_FUNC(6502_asl) {
 	CPU_WRITE(addr, value);
 }
 
-CPU_FUNC(6502_bit) {
+CPU_FUNC(bit) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
@@ -71,7 +71,7 @@ CPU_FUNC(6502_bit) {
 	state->flag |= (value & 0xC0);
 }
 
-CPU_FUNC(6502_cmp) {
+CPU_FUNC(cmp) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
@@ -84,7 +84,7 @@ CPU_FUNC(6502_cmp) {
 	CPU_SET_N((uint8_t) (state->ra - value));
 }
 
-CPU_FUNC(6502_cpx) {
+CPU_FUNC(cpx) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
@@ -97,7 +97,7 @@ CPU_FUNC(6502_cpx) {
 	CPU_SET_N((uint8_t) (state->rx - value));
 }
 
-CPU_FUNC(6502_cpy) {
+CPU_FUNC(cpy) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_C);
@@ -110,7 +110,7 @@ CPU_FUNC(6502_cpy) {
 	CPU_SET_N((uint8_t) (state->ry - value));
 }
 
-CPU_FUNC(6502_dec) {
+CPU_FUNC(dec) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value = CPU_READ(addr);
 
@@ -121,14 +121,14 @@ CPU_FUNC(6502_dec) {
 	CPU_WRITE(addr, value);
 }
 
-CPU_FUNC(6502_eor) {
+CPU_FUNC(eor) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	state->ra ^= value;
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502_inc) {
+CPU_FUNC(inc) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value = CPU_READ(addr);
 
@@ -139,25 +139,25 @@ CPU_FUNC(6502_inc) {
 	CPU_WRITE(addr, value);
 }
 
-CPU_FUNC(6502_lda) {
+CPU_FUNC(lda) {
 	uint16_t addr = CPU_ADDR(false);
 	state->ra = CPU_READ(addr);
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502_ldx) {
+CPU_FUNC(ldx) {
 	uint16_t addr = CPU_ADDR(false);
 	state->rx = CPU_READ(addr);
 	CPU_UPDATE_NZ(state->rx);
 }
 
-CPU_FUNC(6502_ldy) {
+CPU_FUNC(ldy) {
 	uint16_t addr = CPU_ADDR(false);
 	state->ry = CPU_READ(addr);
 	CPU_UPDATE_NZ(state->ry);
 }
 
-CPU_FUNC(6502_lsr) {
+CPU_FUNC(lsr) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value;
 
@@ -173,14 +173,14 @@ CPU_FUNC(6502_lsr) {
 	CPU_WRITE(addr, value);
 }
 
-CPU_FUNC(6502_ora) {
+CPU_FUNC(ora) {
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	state->ra |= value;
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502_rol) {
+CPU_FUNC(rol) {
 	uint16_t addr = CPU_ADDR(true);
 	uint16_t value;
 	uint8_t result;
@@ -198,7 +198,7 @@ CPU_FUNC(6502_rol) {
 	CPU_WRITE(addr, result);
 }
 
-CPU_FUNC(6502_ror) {
+CPU_FUNC(ror) {
 	uint16_t addr = CPU_ADDR(true);
 	uint16_t value;
 	uint8_t result;
@@ -216,46 +216,46 @@ CPU_FUNC(6502_ror) {
 	CPU_WRITE(addr, result);
 }
 
-CPU_FUNC(6502_sta) {
+CPU_FUNC(sta) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, state->ra);
 }
 
-CPU_FUNC(6502_stx) {
+CPU_FUNC(stx) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, state->rx);
 }
 
-CPU_FUNC(6502_sty) {
+CPU_FUNC(sty) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, state->ry);
 }
 
-CPU_FUNC(6502_jmp) {
+CPU_FUNC(jmp) {
 	state->pc = CPU_ADDR(false);
 }
 
 // 6502i - illegals
 
-CPU_FUNC(6502i_lax) { // LDA & LDX
+CPU_FUNC(i_lax) { // LDA & LDX
 	uint16_t addr = CPU_ADDR(false);
 	state->ra = state->rx = CPU_READ(addr);
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502i_las) { // A,X,S=val&S
+CPU_FUNC(i_las) { // A,X,S=val&S
 	uint16_t addr = CPU_ADDR(false);
 	state->ra = state->rx = state->sp = state->sp & CPU_READ(addr);
 	CPU_UPDATE_NZ(state->ra);
 }
 
-CPU_FUNC(6502i_tas) {
+CPU_FUNC(i_tas) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 	// TODO
 }
 
-CPU_FUNC(6502i_dcp) {
+CPU_FUNC(i_dcp) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value = CPU_READ(addr);
 
@@ -273,7 +273,7 @@ CPU_FUNC(6502i_dcp) {
 	CPU_SET_N((uint8_t) (state->ra - value));
 }
 
-CPU_FUNC(6502i_isc) {
+CPU_FUNC(i_isc) {
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value = CPU_READ(addr);
 
@@ -283,41 +283,41 @@ CPU_FUNC(6502i_isc) {
 	CPU_CLEAR_FLAGS(FLAG_N | FLAG_Z | FLAG_V);
 	CPU_WRITE(addr, value);
 
-	cpu_6502_internal_sbc(CPU_STATE_ARGS, value);
+	CPU_6502_NAME(internal_sbc)(CPU_STATE_ARGS, value);
 	CPU_SET_N(state->ra);
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_ahx) {
+CPU_FUNC(i_ahx) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 	// TODO
 }
 
-CPU_FUNC(6502i_shx) {
+CPU_FUNC(i_shx) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 	// TODO
 }
 
-CPU_FUNC(6502i_shy) {
+CPU_FUNC(i_shy) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 	// TODO
 }
 
-CPU_FUNC(6502i_axs) {
+CPU_FUNC(i_axs) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_READ(addr);
 	// TODO
 }
 
-CPU_FUNC(6502i_sax) { // ST(A & X)
+CPU_FUNC(i_sax) { // ST(A & X)
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, state->ra & state->rx);
 }
 
-CPU_FUNC(6502i_slo) { // ASL + ORA
+CPU_FUNC(i_slo) { // ASL + ORA
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value;
 
@@ -334,7 +334,7 @@ CPU_FUNC(6502i_slo) { // ASL + ORA
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_sre) { // LSR + EOR
+CPU_FUNC(i_sre) { // LSR + EOR
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value;
 
@@ -351,7 +351,7 @@ CPU_FUNC(6502i_sre) { // LSR + EOR
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_anc) { // AND + carry
+CPU_FUNC(i_anc) { // AND + carry
 	uint16_t addr = CPU_ADDR(false);
 	uint8_t value = CPU_READ(addr);
 	state->ra &= value;
@@ -361,7 +361,7 @@ CPU_FUNC(6502i_anc) { // AND + carry
 	if (state->ra >= 0x80) { state->flag |= FLAG_N | FLAG_C; }
 }
 
-CPU_FUNC(6502i_rla) { // ROL + AND
+CPU_FUNC(i_rla) { // ROL + AND
 	uint16_t addr = CPU_ADDR(true);
 	uint16_t value;
 	uint8_t result;
@@ -379,7 +379,7 @@ CPU_FUNC(6502i_rla) { // ROL + AND
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_alr) { // AND + LSR
+CPU_FUNC(i_alr) { // AND + LSR
 	uint16_t addr = CPU_ADDR(true);
 	uint8_t value;
 
@@ -393,7 +393,7 @@ CPU_FUNC(6502i_alr) { // AND + LSR
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_rra) { // ROR + ADC
+CPU_FUNC(i_rra) { // ROR + ADC
 	uint16_t addr = CPU_ADDR(true);
 	uint16_t value;
 	uint8_t result;
@@ -407,25 +407,25 @@ CPU_FUNC(6502i_rra) { // ROR + ADC
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 
 	CPU_WRITE(addr, result);
-	cpu_6502_internal_adc(CPU_STATE_ARGS, result);
+	CPU_6502_NAME(internal_adc)(CPU_STATE_ARGS, result);
 	CPU_SET_N(state->ra);
 	CPU_SET_Z(state->ra);
 }
 
-CPU_FUNC(6502i_arr) { // AND + ROR + weird C/V flags
+CPU_FUNC(i_arr) { // AND + ROR + weird C/V flags
 	// TODO
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
 }
 
-CPU_FUNC(6502i_xaa) { // what
+CPU_FUNC(i_xaa) { // what
 	uint16_t addr = CPU_ADDR(false);
 	state->ra = (state->ra | CPU_6502I_XAA_MAGIC) & state->rx & CPU_READ(addr);
 	CPU_UPDATE_NZ(state->ra);
 }
 
-// 65c02
-
-CPU_FUNC(65c02_stz) {
+#ifdef CPU_6502_65C02
+CPU_FUNC(stz) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, 0);
 }
+#endif

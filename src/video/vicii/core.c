@@ -9,13 +9,14 @@ static inline uint8_t vic_read_bank_mem(struct C64Global *H, struct C64 *state, 
 	uint8_t bank = (state->cia2.port_a_rw ^ 3) & 3;
 	if ((bank == 0 || bank == 2) && addr >= 0x1000 && addr <= 0x1FFF)
 		return H->rom_char[addr & 0x0FFF];
-	return cpu_6502_read_mem(H, state, addr | (bank << 14));
+	return c64_6502_read_mem(H, state, addr | (bank << 14));
 }
 
 static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct C64 *state, int x, int y) {
 	uint8_t color = 0xFF;
-	uint8_t char_byte;
+	uint8_t char_byte = 0x00;
 	uint8_t data_byte;
+	uint8_t color_pixel = vic->colors[VIC_BACKGROUND_COLOR];
 
 	if (vic->border_on) {
 		return vic->colors[VIC_BORDER_COLOR];
@@ -44,41 +45,41 @@ static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct
 			case 0: // standard char
 			case 4: // standard bitmap
 				if ((data_byte << (x & 7)) & 0x80)
-					return color;
+					color_pixel = color;
 				break;
 			case 1: // multi-col char
 				if (color & 0x08) {
 					uint8_t b = (data_byte >> ((x & 6) ^ 6)) & 0x03;
 					if (b == 3)
-						return color & 0x07;
+						color_pixel = color & 0x07;
 					else
-						return vic->colors[VIC_BACKGROUND_COLOR + b];
+						color_pixel = vic->colors[VIC_BACKGROUND_COLOR + b];
 				} else {
 					if ((data_byte << (x & 7)) & 0x80)
-						return color & 0x07;
+						color_pixel = color & 0x07;
 				}
 				break;
 			case 2: //ext-col char
 				if ((data_byte << (x & 7)) & 0x80)
-					return color;
+					color_pixel = color;
 				else
-					return vic->colors[VIC_BACKGROUND_COLOR + (char_byte >> 6)];
+					color_pixel = vic->colors[VIC_BACKGROUND_COLOR + (char_byte >> 6)];
 				break;
 			case 5: {// multi-col bitmap
 				uint8_t b = (data_byte >> ((x & 6) ^ 6)) & 0x03;
 				if (b == 3)
-					return color;
+					color_pixel = color;
 				else
-					return vic->colors[VIC_BACKGROUND_COLOR + b];
+					color_pixel = vic->colors[VIC_BACKGROUND_COLOR + b];
 			} break;
 			case 3:
 			case 6:
 			case 7: // reserved
-				return 0;
+				color_pixel = 0;
 		}
 	}
 
-	return vic->colors[VIC_BACKGROUND_COLOR];
+	return color_pixel;
 }
 
 static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C64 *state) {
@@ -95,7 +96,7 @@ static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C6
 				vic->row_pixels[i] = data_byte;
 				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
 			}
-		} else { // char read
+		} else if ((y & 7) == 0) { // char read
 			for (int i = 0; i < 40; i++) {
 				uint8_t chr_ind = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0xF0) << 6) + i + ((y >> 3) * 40));
 				vic->row_pixels[i] = chr_ind;
@@ -107,7 +108,7 @@ static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C6
 
 static void vic_irq(struct VIC *vic, struct C64Global *H, struct C64 *state, uint8_t irq) {
 	vic->irq_status |= 0x80 | irq;
-	cpu_6502_irq(&(state->cpu));
+	c64_6502_irq(&(state->cpu));
 }
 
 static inline bool vic_irq_ready(struct VIC *vic, uint8_t irq) {
@@ -136,21 +137,25 @@ void vic_run(struct VIC *vic, struct C64Global *H, struct C64 *state, uint64_t t
 		vic->raster_x += 8;
 		if (vic->raster_x == DRAW_AREA_START_X)
 			vic->border_on &= ~1;
-		else if (vic->raster_x == DRAW_AREA_START_X + 320)
+		else if (vic->raster_x == DRAW_AREA_START_X + ((vic->control2 & 0x08) ? 320 : 304))
 			vic->border_on |= 1;
 
 		if (vic->raster_x >= FRAME_SCANLINE_WIDTH) {
 			vic->raster_x = 0;
 			vic->raster_y = (vic->raster_y + 1) % FRAME_SCANLINES;
+			if (vic->raster_y == 0)
+				vic->frame_counter++;
+
 			vic->control1 = (vic->control1 & 0x7F) | ((vic->raster_y >> 1) & 0x80);
 			if (vic->raster_y == DRAW_AREA_START_Y)
 				vic->border_on &= ~2;
-			else if (vic->raster_y == DRAW_AREA_START_Y + 200)
+			else if (vic->raster_y == DRAW_AREA_START_Y + ((vic->control1 & 0x08) ? 200 : 192))
 				vic->border_on |= 2;
 		
 			vic_fetch_row(vic, H, state);
 
-			if (vic_irq_ready(vic, VIC_IRQ_RASTER) && (vic->raster_irq == (vic->raster_y & 0xFF))) {
+			if (vic_irq_ready(vic, VIC_IRQ_RASTER) && (vic->raster_irq == vic->raster_y)) {
+				//printf("vic:rasterline:(%d)%d\n", vic->frame_counter, vic->raster_irq);
 				vic_irq(vic, H, state, VIC_IRQ_RASTER);
 			}
 		}
@@ -246,7 +251,7 @@ void vic_write_mem(struct C64Global *H, struct C64 *Hstate, uint16_t addr, uint8
 		vic->color_ram[addr & 0x3FF] = value;
 	else {
 		addr &= 0x3F;
-		// fprintf(stderr, "vicw:%02X:%02X\n", addr, value);
+		//printf("vicw(%d)%d:%02X:%02X\n", vic->frame_counter, vic->raster_y, addr, value);
 		switch (addr) {
 			case 0x00:
 			case 0x02:
@@ -276,9 +281,10 @@ void vic_write_mem(struct C64Global *H, struct C64 *Hstate, uint16_t addr, uint8
 				break;
 			case 0x11:
 				vic->control1 = (vic->control1 & 0x80) | (value & 0x7F);
+				vic->raster_irq = (vic->raster_irq & 0xFF) | ((value & 0x80) << 1);
 				break;
 			case 0x12:
-				vic->raster_irq = value; // TODO
+				vic->raster_irq = (vic->raster_irq & 0x100) | value;
 				break;
 			case 0x15:
 				vic->sprite_enable = value;
@@ -293,7 +299,9 @@ void vic_write_mem(struct C64Global *H, struct C64 *Hstate, uint16_t addr, uint8
 				vic->memory_pointers = value;
 				break;
 			case 0x19:
-				vic->irq_status &= (~(value) & 0x7F);
+				vic->irq_status &= (~(value));
+				if (vic->irq_status == 0x80)
+					vic->irq_status = 0;
 				break;
 			case 0x1A:
 				vic->irq_enable = value;
