@@ -67,6 +67,9 @@ struct C64Global
 	uint8_t rom_cartridge[0x4000];
 	bool rom_cartridge_present;
 
+	uint8_t prg[0x10000];
+	size_t prg_len;
+
 	// VIC
 	uint8_t frame_data[SCREEN_HEIGHT * SCREEN_WIDTH];
 };

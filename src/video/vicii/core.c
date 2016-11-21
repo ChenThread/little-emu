@@ -12,20 +12,73 @@ static inline uint8_t vic_read_bank_mem(struct C64Global *H, struct C64 *state, 
 	return cpu_6502_read_mem(H, state, addr | (bank << 14));
 }
 
-static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct C64 *state, int x) {
+static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct C64 *state, int x, int y) {
 	uint8_t color = 0xFF;
+	uint8_t char_byte;
 	uint8_t data_byte;
+
+	if (vic->border_on) {
+		return vic->colors[VIC_BORDER_COLOR];
+	}
 
 	if (x >= 0 && x < 320) {
 		color = vic->row_colors[x >> 3];
 		data_byte = vic->row_pixels[x >> 3];
 	}
 
-	if (color != 0xFF && (data_byte << (x & 7)) & 0x80) {
-		return color & 0x0F;
-	} else {
-		return vic->colors[vic->border_on ? VIC_BORDER_COLOR : VIC_BACKGROUND_COLOR];
+	if (color != 0xFF) {
+		uint8_t screen_mode = ((vic->control1 & 0x20) >> 3)
+			| (vic->control1 & 0x40) >> 5
+			| (vic->control2 & 0x10) >> 4;
+
+		color &= 0x0F;
+
+		if (!(screen_mode & 4)) {
+			char_byte = data_byte;
+			data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x0E) << 10) +
+				((screen_mode == 2) ? ((char_byte & 0x3F) << 3) : (char_byte << 3))
+				+ (y & 7));
+		}
+
+		switch (screen_mode) {
+			case 0: // standard char
+			case 4: // standard bitmap
+				if ((data_byte << (x & 7)) & 0x80)
+					return color;
+				break;
+			case 1: // multi-col char
+				if (color & 0x08) {
+					uint8_t b = (data_byte >> ((x & 6) ^ 6)) & 0x03;
+					if (b == 3)
+						return color & 0x07;
+					else
+						return vic->colors[VIC_BACKGROUND_COLOR + b];
+				} else {
+					if ((data_byte << (x & 7)) & 0x80)
+						return color & 0x07;
+				}
+				break;
+			case 2: //ext-col char
+				if ((data_byte << (x & 7)) & 0x80)
+					return color;
+				else
+					return vic->colors[VIC_BACKGROUND_COLOR + (char_byte >> 6)];
+				break;
+			case 5: {// multi-col bitmap
+				uint8_t b = (data_byte >> ((x & 6) ^ 6)) & 0x03;
+				if (b == 3)
+					return color;
+				else
+					return vic->colors[VIC_BACKGROUND_COLOR + b];
+			} break;
+			case 3:
+			case 6:
+			case 7: // reserved
+				return 0;
+		}
 	}
+
+	return vic->colors[VIC_BACKGROUND_COLOR];
 }
 
 static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C64 *state) {
@@ -45,8 +98,7 @@ static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C6
 		} else { // char read
 			for (int i = 0; i < 40; i++) {
 				uint8_t chr_ind = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0xF0) << 6) + i + ((y >> 3) * 40));
-				uint8_t data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x0E) << 10) + (chr_ind << 3) + (y & 7));
-				vic->row_pixels[i] = data_byte;
+				vic->row_pixels[i] = chr_ind;
 				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
 			}	
 		}
@@ -75,7 +127,7 @@ void vic_run(struct VIC *vic, struct C64Global *H, struct C64 *state, uint64_t t
 			int ipx = vic->raster_x - DRAW_AREA_START_X;
 			uint8_t *frame_ptr = &(H->frame_data[vic->raster_y * SCREEN_WIDTH + vic->raster_x]);
 			for (int i = 0; i < 8; i++) {
-				*frame_ptr = vic_get_pixel(vic, H, state, ipx);
+				*frame_ptr = vic_get_pixel(vic, H, state, ipx, ipy);
 				ipx++;
 				frame_ptr++;
 			}

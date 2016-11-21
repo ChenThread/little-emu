@@ -83,7 +83,7 @@ uint8_t cpu_6502_read_mem(struct C64Global *H, struct C64 *Hstate, uint16_t addr
 		return H->rom_kernal[addr - 0xE000];
 	if (addr >= 0xD000 && addr <= 0xDFFF) {
 		if (ROM_CHAR_ENABLED)
-			return H->rom_char[addr - 0xD000];
+			return H->rom_char[addr & 0xFFF];
 		else {
 			if (addr <= 0xD3FF || (addr >= 0xD800 && addr <= 0xDBFF))
 				return vic_read_mem(H, Hstate, addr);
@@ -103,7 +103,7 @@ void cpu_6502_write_mem(struct C64Global *H, struct C64 *Hstate, uint16_t addr, 
 	if (addr == 0x0000)
 		Hstate->cpu_io0 = 0xC0 | (value & 0x3F);
 	else if (addr == 0x0001)
-		Hstate->cpu_io1 = 0xC0 | (Hstate->cpu_io1 & 0x30) | (value & 0x0F);
+		Hstate->cpu_io1 = 0xC0 | (Hstate->cpu_io1 & (Hstate->cpu_io0)) | (value & ~(Hstate->cpu_io0));
 	else if ((addr >= 0xD000 && addr <= 0xD3FF) || (addr >= 0xD800 && addr <= 0xDBFF))
 		vic_write_mem(H, Hstate, addr, value);
 	else if (addr >= 0xDC00 && addr <= 0xDCFF)

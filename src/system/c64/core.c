@@ -29,13 +29,19 @@ void c64_init(struct C64Global *G, struct C64 *c64)
 	*c64 = (struct C64){
 		.H={.timestamp = 0,},
 		.cpu_io0 = 0xFF,
-		.cpu_io1 = 0xC7,
+		.cpu_io1 = 0xC3,
 		.key_matrix = 0,
 	};
+
 	cpu_6502_init(&(G->H), &(c64->H), &(c64->cpu));
 	vic_init(&(G->H), &(c64->vic));
 	cia1_init(&(G->H), &(c64->cia1));
 	cia2_init(&(G->H), &(c64->cia2));
+
+	if (G->prg_len > 0) {
+		uint16_t addr = G->prg[0] | (G->prg[1] << 8);
+		memcpy(&(c64->ram[addr]), G->prg, G->prg_len - 2);
+	}
 }
 
 static void c64_bin_load(uint8_t* ptr, const char *fname, size_t len) {
@@ -56,8 +62,8 @@ static void c64_rom_load(struct C64Global *G, const char *fname, const void *dat
 
 	if (result != NULL) {
 		uint8_t *data8 = (uint8_t*) data;
-		uint16_t addr = data8[0] | (data8[1] << 8);
-		memcpy(&G->current.ram[addr], &data8[2], len - 2);
+		G->prg_len = len > 0x10000 ? 0x10000 : len;
+		memcpy(G->prg, data8, G->prg_len);
 	} else {
 		memcpy(G->rom_cartridge, data, len);
 		G->rom_cartridge_present = true;
