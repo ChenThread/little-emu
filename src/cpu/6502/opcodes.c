@@ -2,6 +2,16 @@
 
 #define PAGE_MATCH(a, b) (((a) & 0xFF00) == ((b) & 0xFF00))
 
+#ifdef CPU_6502_65C02
+	#define CPU_ADD_CYCLES_BOUNDARY_CROSS(a, b) if (!PAGE_MATCH((a), (b))) { \
+			CPU_ADD_CYCLES(CPU_STATE_ARGS, 1); \
+		}
+#else
+	#define CPU_ADD_CYCLES_BOUNDARY_CROSS(a, b) if (ignore_page_boundary || !PAGE_MATCH((a), (b))) { \
+			CPU_ADD_CYCLES(CPU_STATE_ARGS, 1); \
+		}
+#endif
+
 // 6502 addr. modes
 
 static inline uint16_t CPU_6502_NAME(addr_ra)(CPU_STATE_PARAMS, bool ignore_page_boundary) { return 0; }
@@ -29,17 +39,13 @@ static inline uint16_t CPU_6502_NAME(addr_abs)(CPU_STATE_PARAMS, bool ignore_pag
 
 static inline uint16_t CPU_6502_NAME(addr_absx)(CPU_STATE_PARAMS, bool ignore_page_boundary) {
 	uint16_t base = CPU_6502_NAME(next_word_cycled)(CPU_STATE_ARGS);
-	if (ignore_page_boundary || !PAGE_MATCH(base, base + state->rx)) {
-		CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
-	}
+	CPU_ADD_CYCLES_BOUNDARY_CROSS(base, base + state->rx);
 	return base + state->rx;
 }
 
 static inline uint16_t CPU_6502_NAME(addr_absy)(CPU_STATE_PARAMS, bool ignore_page_boundary) {
 	uint16_t base = CPU_6502_NAME(next_word_cycled)(CPU_STATE_ARGS);
-	if (ignore_page_boundary || !PAGE_MATCH(base, base + state->ry)) {
-		CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
-	}
+	CPU_ADD_CYCLES_BOUNDARY_CROSS(base, base + state->ry);
 	return base + state->ry;
 }
 
@@ -58,9 +64,7 @@ static inline uint16_t CPU_6502_NAME(addr_zpindx)(CPU_STATE_PARAMS, bool ignore_
 }
 static inline uint16_t CPU_6502_NAME(addr_zpindy)(CPU_STATE_PARAMS, bool ignore_page_boundary) {
 	uint16_t base = CPU_6502_NAME(read_mem_word_cycled_page)(CPU_STATE_ARGS, CPU_6502_NAME(next_cycled)(CPU_STATE_ARGS));
-	if (ignore_page_boundary || !PAGE_MATCH(base, base + state->ry)) {
-		CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
-	}
+	CPU_ADD_CYCLES_BOUNDARY_CROSS(base, base + state->ry);
 	return base + state->ry;
 }
 
@@ -176,7 +180,9 @@ static void CPU_6502_NAME(hlt)(CPU_STATE_PARAMS) {
 }
 
 static void CPU_6502_NAME(nop)(CPU_STATE_PARAMS) {
+#ifndef CPU_6502_65C02
 	CPU_ADD_CYCLES(CPU_STATE_ARGS, 1);
+#endif
 }
 
 CPU_FUNC_CLEARFLAG(clc, FLAG_C);

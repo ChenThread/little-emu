@@ -1,12 +1,21 @@
-#define FRAME_CYCLES 63
+#if (USE_NTSC) != 0
+	#define FRAME_CYCLES 65
+	#define FRAME_SCANLINES 263
+	#define FRAME_WAIT (1000000/59.825)
+	#define DRAW_AREA_START_X 40
+	#define DRAW_AREA_START_Y 48
+#else
+	#define FRAME_CYCLES 63
+	#define FRAME_SCANLINES 312
+	#define FRAME_WAIT (1000000/50.125)
+	#define DRAW_AREA_START_X 40
+	#define DRAW_AREA_START_Y 48
+#endif
+
 #define FRAME_SCANLINE_WIDTH (FRAME_CYCLES << 3)
-#define FRAME_SCANLINES 312
-#define FRAME_WAIT (1000000/50.125)
 #define SCREEN_WIDTH 400
-#define SCREEN_HEIGHT 284
-#define SCREEN_START_Y 15
-#define DRAW_AREA_START_X 40
-#define DRAW_AREA_START_Y 48
+#define SCREEN_HEIGHT FRAME_SCANLINES
+#define SCREEN_START_Y 0
 
 #define VIC_CONTROL_1 0x11
 #define VIC_CONTROL_2 0x16
@@ -31,7 +40,9 @@ struct VIC {
 	// row data
 	uint8_t row_pixels[40];
 	uint8_t row_colors[40];
-	uint8_t border_on;
+	uint16_t row_addr;
+	uint8_t row_ypos;
+	uint8_t border_on, picture_on;
 	bool row_fetch;
 
 	// registers

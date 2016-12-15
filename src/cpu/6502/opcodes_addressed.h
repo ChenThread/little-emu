@@ -428,4 +428,20 @@ CPU_FUNC(stz) {
 	uint16_t addr = CPU_ADDR(false);
 	CPU_WRITE(addr, 0);
 }
+
+CPU_FUNC(trb) {
+	uint16_t addr = CPU_ADDR(false);
+	uint8_t result = CPU_READ(addr) & ~(state->ra);
+	CPU_CLEAR_FLAGS(FLAG_Z);
+	CPU_SET_Z(result); 
+	CPU_WRITE(addr, result);
+}
+
+CPU_FUNC(tsb) {
+	uint16_t addr = CPU_ADDR(false);
+	uint8_t result = CPU_READ(addr) | (state->ra);
+	CPU_CLEAR_FLAGS(FLAG_Z);
+	CPU_SET_Z(result); 
+	CPU_WRITE(addr, result);
+}
 #endif
