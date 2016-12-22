@@ -50,6 +50,8 @@ struct MD
 	//struct VDP vdp;
 	//struct PSG psg;
 	uint8_t joy[4];
+	bool z80_busreq;
+	bool z80_busack;
 } __attribute__((__packed__));
 
 struct MDGlobal
