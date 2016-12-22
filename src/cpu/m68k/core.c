@@ -739,7 +739,7 @@ static void m68k_grp_0x5(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(v == 0xFFFF) {
 		M68K_ADD_CYCLES(m68k, 10);
 	} else {
-		m68k->pc += offs;
+		m68k->pc += offs-2;
 		assert((m68k->pc&1) == 0);
 		M68K_ADD_CYCLES(m68k, 6);
 	}
