@@ -717,6 +717,34 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 }
 
+static void m68k_grp_0x5(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
+{
+	// DBcc
+	int cond = (op>>8)&0xF;
+	uint32_t offs = (uint32_t)(int32_t)(int16_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+	bool cond_pass = m68k_cc4_true(m68k, cond);
+
+	if(cond_pass) {
+		M68K_ADD_CYCLES(m68k, 8);
+		return;
+	}
+
+	// Decrement
+	int reg = op&0x7;
+	uint16_t v = m68k->rd[reg]-1;
+	m68k->rd[reg] &= ~0xFFFF;
+	m68k->rd[reg] |= v;
+
+	// Branch if necessary
+	if(v == 0xFFFF) {
+		M68K_ADD_CYCLES(m68k, 10);
+	} else {
+		m68k->pc += offs;
+		assert((m68k->pc&1) == 0);
+		M68K_ADD_CYCLES(m68k, 6);
+	}
+}
+
 static void m68k_grp_0x6(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 {
 	// Branches
@@ -737,7 +765,7 @@ static void m68k_grp_0x6(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	}
 
 	if(is_word_offs) {
-		offs = (uint32_t)(int32_t)(int8_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+		offs = (uint32_t)(int32_t)(int16_t)m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
 	}
 
 	if(cond_pass) {
@@ -774,7 +802,10 @@ static void m68k_grp_0xD(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 	if(((op>>3)&6) == 0 && (opmode&4) != 0) {
 		// ADDX, EA makes no damn sense
-		assert(!"TODO: ADDX");
+		printf("%08X: %04X (ADDX, grp 0x6)\n", m68k->pc-2, op);
+		m68k->halted = 1;
+		m68k->H.timestamp = m68k->H.timestamp_end;
+		return;
 	}
 
 	// WARNING: V FLAG FEATURED.
@@ -788,12 +819,16 @@ static void m68k_grp_0xD(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	// * NOT (A XOR B) is true.
 	// * (R XOR A) is true.
 
+	// NOTE: long timing is weird here.
+	// Normally 6 cycles, but adds 2 if EA is An, Dn, or #.
+
 	int auxreg = (op>>9)&7;
 	switch(opmode)
 	{
+		/*
 		case 0x0: // ADD.B to Dn
-			assert(!"TODO");
 			break;
+		*/
 
 		case 0x1: {
 			// ADD.W to Dn
@@ -809,30 +844,31 @@ static void m68k_grp_0xD(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 			m68k->rd[auxreg] |= lr;
 		} break;
 
+		/*
 		case 0x2: // ADD.L to Dn
-			assert(!"TODO");
 			break;
 
-		case 0x3: // ADDA.L to An
-			assert(!"TODO");
+		case 0x3: // ADDA.W to An
 			break;
 
 		case 0x4: // ADD.B from Dn
-			assert(!"TODO");
 			break;
 
 		case 0x5: // ADD.W from Dn
-			assert(!"TODO");
 			break;
 
 		case 0x6: // ADD.L from Dn
-			assert(!"TODO");
 			break;
 
-		case 0x7: // ADDA.L from An
-			assert(!"TODO");
+		case 0x7: // ADDA.L to An
 			break;
+		*/
 
+		default:
+			printf("%08X: %04X (ADD/ADDA, grp 0x6)\n", m68k->pc-2, op);
+			m68k->halted = 1;
+			m68k->H.timestamp = m68k->H.timestamp_end;
+			return;
 	}
 }
 
@@ -898,6 +934,10 @@ void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 
 			case 0x4:
 				m68k_grp_0x4(m68k, M68K_STATE_ARGS, op);
+				break;
+
+			case 0x5:
+				m68k_grp_0x5(m68k, M68K_STATE_ARGS, op);
 				break;
 
 			case 0x6:
