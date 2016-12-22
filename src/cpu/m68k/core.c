@@ -767,6 +767,75 @@ static void m68k_grp_0x7(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	m68k->rd[(op>>9)&0x7] = val;
 }
 
+static void m68k_grp_0xD(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
+{
+	// ADD/ADDA/ADDX
+	int opmode = (op>>6)&7;
+
+	if(((op>>3)&6) == 0 && (opmode&4) != 0) {
+		// ADDX, EA makes no damn sense
+		assert(!"TODO: ADDX");
+	}
+
+	// WARNING: V FLAG FEATURED.
+	// LIKE EVERYTHING INVOLVING A V FLAG, HERE BE DRAGONS.
+	// Going by sign, these set the overflow flag:
+	// +a +b -r
+	// -a -b +r
+	// A and B are the same.
+	// R is different from either one.
+	// Thus, going by sign bits:
+	// * NOT (A XOR B) is true.
+	// * (R XOR A) is true.
+
+	int auxreg = (op>>9)&7;
+	switch(opmode)
+	{
+		case 0x0: // ADD.B to Dn
+			assert(!"TODO");
+			break;
+
+		case 0x1: {
+			// ADD.W to Dn
+			uint16_t la = m68k->rd[auxreg];
+			uint16_t lb = m68k_ea_read_32(m68k, M68K_STATE_ARGS, op);
+			uint16_t lr = la+lb;
+			m68k->sr &= ~(F_N|F_Z|F_V|F_C|F_X);
+			m68k->sr |= (lr < la ? (F_C|F_X) : 0);
+			m68k->sr |= (lr == 0 ? F_Z : 0);
+			m68k->sr |= ((lr&0x8000) != 0 ? F_N : 0);
+			m68k->sr |= ((0x8000&(lr^la)&~(la^lb)) != 0 ? (F_V) : 0);
+			m68k->rd[auxreg] &= ~0xFFFF;
+			m68k->rd[auxreg] |= lr;
+		} break;
+
+		case 0x2: // ADD.L to Dn
+			assert(!"TODO");
+			break;
+
+		case 0x3: // ADDA.L to An
+			assert(!"TODO");
+			break;
+
+		case 0x4: // ADD.B from Dn
+			assert(!"TODO");
+			break;
+
+		case 0x5: // ADD.W from Dn
+			assert(!"TODO");
+			break;
+
+		case 0x6: // ADD.L from Dn
+			assert(!"TODO");
+			break;
+
+		case 0x7: // ADDA.L from An
+			assert(!"TODO");
+			break;
+
+	}
+}
+
 void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 {
 	// Don't jump back into the past
@@ -837,6 +906,10 @@ void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 
 			case 0x7:
 				m68k_grp_0x7(m68k, M68K_STATE_ARGS, op);
+				break;
+
+			case 0xD:
+				m68k_grp_0xD(m68k, M68K_STATE_ARGS, op);
 				break;
 
 			default:
