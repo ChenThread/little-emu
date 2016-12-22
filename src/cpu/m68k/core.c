@@ -301,9 +301,40 @@ static void m68k_grp_0x0(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 	} else if((op&~0x0EFF) == 0x0100) {
 		// bit op registers
-		printf("%08X: %04X (bitreg grp 0x0)\n", m68k->pc-2, op);
-		m68k->halted = 1;
-		m68k->H.timestamp = m68k->H.timestamp_end;
+		switch((op>>6)&0x3)
+		{
+			case 0x0: {
+				if(!m68k_allow_ea_src(m68k, op, 0x1FFD)) {
+					assert(!"invalid source EA");
+				}
+
+				int bit_idx = m68k->rd[(op>>9)&0x7];
+				bool is_set;
+				if(m68k_ea_calc_src(m68k, M68K_STATE_ARGS, op, 1)) {
+					// memory, so .B
+					uint32_t val = m68k_read_8(m68k, M68K_STATE_ARGS, m68k->last_ea);
+					is_set = ((val>>(bit_idx&0x7))&1) != 0;
+
+				} else {
+					// register, so .L
+					is_set = ((m68k->last_non_ea>>(bit_idx&0x1F))&1) != 0;
+
+				}
+
+				if(is_set) {
+					m68k->sr &= ~F_Z;
+				} else {
+					m68k->sr |= F_Z;
+				}
+
+			} break;
+
+			default:
+				printf("%08X: %04X (bitreg grp 0x0)\n", m68k->pc-2, op);
+				m68k->halted = 1;
+				m68k->H.timestamp = m68k->H.timestamp_end;
+				break;
+		}
 
 	} else switch((op>>9)&0x7) {
 		case 0x1: {
@@ -798,6 +829,7 @@ static void m68k_grp_0x7(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 static void m68k_grp_0xD(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 {
 	// ADD/ADDA/ADDX
+	// TODO: proper EA masking
 	int opmode = (op>>6)&7;
 
 	if(((op>>3)&6) == 0 && (opmode&4) != 0) {
