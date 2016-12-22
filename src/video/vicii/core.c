@@ -12,15 +12,11 @@ static inline uint8_t vic_read_bank_mem(struct C64Global *H, struct C64 *state, 
 	return c64_6502_read_mem(H, state, addr | (bank << 14));
 }
 
-static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct C64 *state, int x, int y) {
+static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct C64 *state, int x) {
 	uint8_t color = 0xFF;
 	uint8_t char_byte = 0x00;
 	uint8_t data_byte;
 	uint8_t color_pixel = vic->colors[VIC_BACKGROUND_COLOR];
-
-	if (vic->border_on) {
-		return vic->colors[VIC_BORDER_COLOR];
-	}
 
 	if (x >= 0 && x < 320) {
 		color = vic->row_colors[x >> 3];
@@ -38,7 +34,7 @@ static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct
 			char_byte = data_byte;
 			data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x0E) << 10) +
 				((screen_mode == 2) ? ((char_byte & 0x3F) << 3) : (char_byte << 3))
-				+ (y & 7));
+				+ vic->row_ypos);
 		}
 
 		switch (screen_mode) {
@@ -85,22 +81,22 @@ static inline uint8_t vic_get_pixel(struct VIC *vic, struct C64Global *H, struct
 static inline void vic_fetch_row(struct VIC *vic, struct C64Global *H, struct C64 *state) {
 	// TODO: emulate the 40 cycles stall
 	int y = vic->raster_y - DRAW_AREA_START_Y;
-	if (y < 0 || y >= 200) {
+	if (y < 0 || y >= 200 || vic->row_addr < 0 || !vic->picture_on) {
 		for (int i = 0; i < 40; i++) {
-			vic->row_colors[i] = 0xFF;
+			vic->row_colors[i] = vic_read_bank_mem(H, state, 0x3FFF);
 		}
 	} else {
 		if (vic->control1 & 0x20) { // bitmap read
 			for (int i = 0; i < 40; i++) {
-				uint8_t data_byte = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0x08) << 10) + i + ((y >> 3) * 40));
+				uint8_t data_byte = vic_read_bank_mem(H, state, ((vic->memory_pointers & 0x08) << 10) + vic->row_addr + i);
 				vic->row_pixels[i] = data_byte;
-				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
+				vic->row_colors[i] = vic->color_ram[i + vic->row_addr];
 			}
-		} else if ((y & 7) == 0) { // char read
+		} else if (vic->row_ypos == 0) { // char read
 			for (int i = 0; i < 40; i++) {
-				uint8_t chr_ind = vic_read_bank_mem(H, state, ((uint16_t) (vic->memory_pointers & 0xF0) << 6) + i + ((y >> 3) * 40));
+				uint8_t chr_ind = vic_read_bank_mem(H, state, ((vic->memory_pointers & 0xF0) << 6) + vic->row_addr + i);
 				vic->row_pixels[i] = chr_ind;
-				vic->row_colors[i] = vic->color_ram[i + ((y >> 3) * 40)];
+				vic->row_colors[i] = vic->color_ram[i + vic->row_addr];
 			}	
 		}
 	}
@@ -127,10 +123,15 @@ void vic_run(struct VIC *vic, struct C64Global *H, struct C64 *state, uint64_t t
 			int ipy = vic->raster_y - DRAW_AREA_START_Y;
 			int ipx = vic->raster_x - DRAW_AREA_START_X;
 			uint8_t *frame_ptr = &(H->frame_data[vic->raster_y * SCREEN_WIDTH + vic->raster_x]);
-			for (int i = 0; i < 8; i++) {
-				*frame_ptr = vic_get_pixel(vic, H, state, ipx, ipy);
-				ipx++;
-				frame_ptr++;
+			if (vic->border_on) {
+				for (int i = 0; i < 8; i++)
+					*(frame_ptr++) = vic->colors[VIC_BORDER_COLOR];
+			} else {
+				for (int i = 0; i < 8; i++) {
+					*frame_ptr = vic_get_pixel(vic, H, state, ipx);
+					ipx++;
+					frame_ptr++;
+				}
 			}
 		}
 
@@ -143,15 +144,31 @@ void vic_run(struct VIC *vic, struct C64Global *H, struct C64 *state, uint64_t t
 		if (vic->raster_x >= FRAME_SCANLINE_WIDTH) {
 			vic->raster_x = 0;
 			vic->raster_y = (vic->raster_y + 1) % FRAME_SCANLINES;
-			if (vic->raster_y == 0)
+			if (vic->raster_y == 0) {
+				vic->row_addr = -40;
+				vic->row_ypos = 0;
 				vic->frame_counter++;
+			} else {
+				vic->row_ypos = (vic->row_ypos + 1) & 7;
+			}
 
 			vic->control1 = (vic->control1 & 0x7F) | ((vic->raster_y >> 1) & 0x80);
-			if (vic->raster_y == DRAW_AREA_START_Y)
+			int draw_area_end_y = DRAW_AREA_START_Y + ((vic->control1 & 0x08) ? 200 : 192);
+
+			if (vic->raster_y == DRAW_AREA_START_Y) {
+				vic->picture_on = 1;
 				vic->border_on &= ~2;
-			else if (vic->raster_y == DRAW_AREA_START_Y + ((vic->control1 & 0x08) ? 200 : 192))
+			}
+			else if (vic->raster_y == draw_area_end_y) {
+				vic->picture_on = 0;
 				vic->border_on |= 2;
+			}
 		
+			if (vic->picture_on && (vic->raster_y & 0x7) == (vic->control1 & 0x7)) {
+				vic->row_addr += 40;
+				vic->row_ypos = 0;
+			}
+
 			vic_fetch_row(vic, H, state);
 
 			if (vic_irq_ready(vic, VIC_IRQ_RASTER) && (vic->raster_irq == vic->raster_y)) {
