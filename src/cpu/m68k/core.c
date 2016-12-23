@@ -433,7 +433,7 @@ static void m68k_grp_0x3(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(!m68k_allow_ea_dst(m68k, op, 0x03FF)) {
 		assert(!"invalid dest EA");
 	}
-	bool is_movea = ((op>>9)&0x7);
+	bool is_movea = ((op>>6)&0x7) == 1;
 	if(!m68k_allow_ea_src(m68k, op, 0x1FFF)) {
 		assert(!"invalid source EA");
 	}
@@ -442,7 +442,7 @@ static void m68k_grp_0x3(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(m68k_ea_calc_dst(m68k, M68K_STATE_ARGS, op, 2)) {
 		m68k_write_16(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
-	} else if(((op>>6)&0x6) == 0) {
+	} else if(((op>>6)&0x7) == 0) {
 		m68k->rd[(op>>9)&0x7] &= ~0xFFFF;
 		m68k->rd[(op>>9)&0x7] |= val;
 
@@ -463,7 +463,7 @@ static void m68k_grp_0x2(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(!m68k_allow_ea_dst(m68k, op, 0x03FF)) {
 		assert(!"invalid dest EA");
 	}
-	bool is_movea = ((op>>9)&0x7);
+	bool is_movea = ((op>>6)&0x7) == 1;
 	if(!m68k_allow_ea_src(m68k, op, 0x1FFF)) {
 		assert(!"invalid source EA");
 	}
@@ -472,7 +472,7 @@ static void m68k_grp_0x2(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 	if(m68k_ea_calc_dst(m68k, M68K_STATE_ARGS, op, 4)) {
 		m68k_write_32(m68k, M68K_STATE_ARGS, m68k->last_ea, val);
 
-	} else if(((op>>6)&0x6) == 0) {
+	} else if(((op>>6)&0x7) == 0) {
 		m68k->rd[(op>>9)&0x7] = val;
 
 	} else {
@@ -604,14 +604,15 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 				for(int i = 0; i < 8; i++) {
 					if((movem_mask&(0x0001<<i)) != 0) {
 						m68k->rd[i] &= ~0xFFFF;
-						m68k->rd[i] |= m68k_read_16(m68k, M68K_STATE_ARGS, addr);
+						m68k->rd[i] |= (uint32_t)(uint16_t)m68k_read_16(m68k, M68K_STATE_ARGS, addr);
 						addr += 2;
+						//printf("D%d %08X\n", i, m68k->rd[i]);
 					}
 				}
 				for(int i = 0; i < 8; i++) {
 					if((movem_mask&(0x0100<<i)) != 0) {
 						m68k->ra[i] &= ~0xFFFF;
-						m68k->ra[i] |= m68k_read_16(m68k, M68K_STATE_ARGS, addr);
+						m68k->ra[i] |= (uint32_t)(uint16_t)m68k_read_16(m68k, M68K_STATE_ARGS, addr);
 						addr += 2;
 					}
 				}
@@ -643,6 +644,7 @@ static void m68k_grp_0x4(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 			}
 			// TODO: remainder of this thing
+			assert(!"TODO: movem writes");
 		}
 
 		printf("%08X: %04X (grp 0x4)\n", m68k->pc-2, op);
@@ -762,9 +764,11 @@ static void m68k_grp_0x5(struct M68K *m68k, M68K_STATE_PARAMS, uint16_t op)
 
 	// Decrement
 	int reg = op&0x7;
-	uint16_t v = m68k->rd[reg]-1;
+	uint16_t v = (uint16_t)m68k->rd[reg];
+	v--;
 	m68k->rd[reg] &= ~0xFFFF;
 	m68k->rd[reg] |= v;
+	//printf("%04X\n", v);
 
 	// Branch if necessary
 	if(v == 0xFFFF) {
@@ -947,6 +951,7 @@ void M68KNAME(run)(struct M68K *m68k, M68K_STATE_PARAMS, uint64_t timestamp)
 	while(TIME_IN_ORDER(m68k->H.timestamp, m68k->H.timestamp_end)) {
 		//lstamp = m68k->H.timestamp;
 		uint16_t op = m68k_fetch_op_16(m68k, M68K_STATE_ARGS);
+		//printf("OP %04X %08X\n", op, m68k->rd[6]);
 		switch(op>>12) {
 			case 0x0:
 				m68k_grp_0x0(m68k, M68K_STATE_ARGS, op);
