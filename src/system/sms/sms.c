@@ -22,6 +22,8 @@ const char *lemu_core_inputs_player[7] = {
 };
 
 struct SMSGlobal sms_glob;
+static uint32_t pal[64];
+
 void (*sms_hook_poll_input)(struct SMSGlobal *G, struct SMS *sms, int controller, uint64_t timestamp) = NULL;
 
 void sms_init(struct SMSGlobal *G, struct SMS *sms)
@@ -43,6 +45,16 @@ void sms_init(struct SMSGlobal *G, struct SMS *sms)
 	//sms->vdp.H.timestamp = 0;
 
 	sms->ram[0] = 0xAB;
+	for (int v = 0; v < 64; v++) {
+		uint32_t r = ((v>>0)&3)*0x55;
+		uint32_t g = ((v>>2)&3)*0x55;
+		uint32_t b = ((v>>4)&3)*0x55;
+#ifdef _3DS
+		pal[v] = (r<<24)|(g<<16)|(b<<8)|0xFF;
+#else
+		pal[v] = (b<<24)|(g<<16)|(r<<8)|0xFF;
+#endif
+	}
 }
 
 void sms_copy(struct SMS *dest, struct SMS *src)
@@ -427,10 +439,7 @@ void lemu_core_video_callback(struct EmuGlobal *G, struct EmuSurface *S)
 		uint32_t *pp = (uint32_t *)(((uint8_t *)S->pixels) + S->pitch*y);
 		for(int x = 0; x < 342; x++) {
 			uint32_t v = ((struct SMSGlobal *)G)->frame_data[y][x];
-			uint32_t r = ((v>>0)&3)*0x55;
-			uint32_t g = ((v>>2)&3)*0x55;
-			uint32_t b = ((v>>4)&3)*0x55;
-			pp[x] = (b<<24)|(g<<16)|(r<<8);
+			pp[x] = pal[v&0x3F];
 		}
 	}
 }

@@ -52,9 +52,9 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
 	src_len &= (PSG_OUT_BUF_LEN-1);
 #if USE_NTSC
-	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*262*60*len)/(48000*48);
 #else
-	ssize_t ideal_samples_to_read = (228*3*313*50*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*313*50*len)/(48000*48);
 #endif
 	ssize_t samples_to_read = ideal_samples_to_read;
 	ssize_t samples_to_write = len;
@@ -62,10 +62,12 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 		samples_to_read = src_len-ideal_samples_to_read*2+ideal_samples_to_read;
 		//samples_to_read = ideal_samples_to_read;
 	}
+
 	if(samples_to_read > src_len) {
 		samples_to_read = src_len;
 	}
-	//printf("%d %d %d\n", (int)samples_to_read, (int)src_len, (int)ideal_samples_to_read);
+
+//	printf("%d %d %d %d\n", (int)samples_to_read, (int)src_len, (int)ideal_samples_to_read, (int)samples_to_write);
 
 	// If there's not enough to read, just fill
 	if(samples_to_read < 8) {
@@ -104,13 +106,18 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 #endif
 }
 
+static uint64_t left_timediff;
+
 void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(psg->H.timestamp, timestamp)) {
 		return;
 	}
 
-	uint64_t timediff = timestamp - psg->H.timestamp;
+	int64_t timediff = (timestamp - psg->H.timestamp) + left_timediff;
+	if (timediff < 0) {
+		return;
+	}
 
 #ifndef DEDI
 	if(G->no_draw) {
@@ -157,7 +164,9 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 #ifndef DEDI
 	}
 
-	for(uint64_t i = 0; i < timediff; i++) {
+	uint64_t i;
+	uint32_t j = 0;
+	for(i = 0; i < timediff; i+=(16*3)) {
 		int32_t outval = 0;
 		for(int ch = 0; ch < 4; ch++) {
 			if(psg->period[ch] <= 1) {
@@ -166,7 +175,6 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 			}
 			if(psg->poffs[ch] == 0) {
 				psg->poffs[ch] = psg->period[ch];
-				psg->poffs[ch] *= 16*3;
 				if(ch == 3) {
 					psg->poffs[ch] <<= 1;
 					psg->lfsr_offs += 1;
@@ -219,11 +227,13 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 		// Output and advance
 		PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
 		PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
+		j++;
 	}
 	SDL_LockAudio();
-	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, timediff);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, j);
 	SDL_UnlockAudio();
 	//assert(SDL_AtomicGet(&PSG_SOUND_DATA_LEN) < PSG_OUT_BUF_LEN);
+	left_timediff = timediff - i;
 
 	psg->H.timestamp = timestamp;
 #endif

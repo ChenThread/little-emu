@@ -17,6 +17,9 @@ void lemu_core_handle_input(struct EmuGlobal *G, void *state, int player_id, int
 
 uint64_t time_now(void)
 {
+#ifdef _3DS
+	return osGetTime() * 1000;
+#else
 	struct timeval ts;
 	gettimeofday(&ts, NULL);
 
@@ -25,6 +28,7 @@ uint64_t time_now(void)
 	sec *= 1000000ULL;
 	usec += sec;
 	return usec;
+#endif
 }
 
 struct EmuGlobal *lemu_global_new(const char *fname, const void *data, size_t len)
@@ -67,7 +71,11 @@ struct EmuSurface *lemu_surface_new(struct EmuGlobal *G)
 }
 
 void lemu_surface_free(struct EmuSurface* S) {
+#ifdef _3DS
+	linearFree(S->pixels);
+#else
 	free(S->pixels);
+#endif
 	free(S);
 }
 

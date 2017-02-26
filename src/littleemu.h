@@ -1,6 +1,27 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <stdatomic.h>
+
+#ifdef DEDI
+#include <dlfcn.h>
+#else
+#ifdef _3DS
+#include <3ds.h>
+#else
+#include <SDL.h>
+#endif
+#endif
+
+// TODO: This is a hack!
+#ifdef _3DS
+typedef u32 SDL_atomic_t;
+#define SDL_AtomicSet(a, b) atomic_store((a), (b))
+#define SDL_AtomicGet(a) atomic_load((a))
+#define SDL_AtomicAdd(a, b) atomic_fetch_add((a), (b));
+#define SDL_LockAudio() {}
+#define SDL_UnlockAudio() {}
+#endif
 
 #define TIME_IN_ORDER(t0, t1) (((t0) - (t1)) > ((t1) - (t0)))
 

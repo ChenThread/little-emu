@@ -10,17 +10,11 @@
 #include <signal.h>
 #include <sys/time.h>
 
-#ifdef DEDI
-#include <dlfcn.h>
-#else
-#include <SDL.h>
-#endif
-
 #ifndef USE_NTSC
 #define USE_NTSC 0
 #endif
 
-#define PSG_OUT_BUF_LEN (1<<24)
+#define PSG_OUT_BUF_LEN (1<<20)
 
 #include "littleemu.h"
 #include "video/tms9918/all.h"

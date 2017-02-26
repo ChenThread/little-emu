@@ -25,7 +25,7 @@ void (*botlib_hook_input)(struct EmuGlobal *G, void *state, uint64_t timestamp) 
 
 #ifndef DEDI
 // TODO: unhardcode
-static SDL_Keycode keymap[] = {SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_KP_2, SDLK_KP_3};
+static SDL_Keycode keymap[] = {SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_z, SDLK_x};
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;
