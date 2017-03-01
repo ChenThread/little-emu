@@ -9,6 +9,8 @@ static uint16_t PSGNAME(volumes)[16] = {
 static uint8_t lfsr_noise_sequence[65536];
 static int lfsr_noise_len = 0;
 
+#define PSGPERMUL (16*3)
+
 static bool is_initialised = false;
 static void PSGNAME(global_init)(void)
 {
@@ -52,9 +54,9 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
 	src_len &= (PSG_OUT_BUF_LEN-1);
 #if USE_NTSC
-	ssize_t ideal_samples_to_read = (228*3*262*60*len)/(48000*48);
+	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000;
 #else
-	ssize_t ideal_samples_to_read = (228*3*313*50*len)/(48000*48);
+	ssize_t ideal_samples_to_read = (228*3*313*50*len)/48000;
 #endif
 	ssize_t samples_to_read = ideal_samples_to_read;
 	ssize_t samples_to_write = len;
@@ -62,12 +64,10 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 		samples_to_read = src_len-ideal_samples_to_read*2+ideal_samples_to_read;
 		//samples_to_read = ideal_samples_to_read;
 	}
-
 	if(samples_to_read > src_len) {
 		samples_to_read = src_len;
 	}
-
-//	printf("%d %d %d %d\n", (int)samples_to_read, (int)src_len, (int)ideal_samples_to_read, (int)samples_to_write);
+	//printf("%d %d %d\n", (int)samples_to_read, (int)src_len, (int)ideal_samples_to_read);
 
 	// If there's not enough to read, just fill
 	if(samples_to_read < 8) {
@@ -106,18 +106,14 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 #endif
 }
 
-static uint64_t left_timediff;
-
 void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(psg->H.timestamp, timestamp)) {
 		return;
 	}
 
-	int64_t timediff = (timestamp - psg->H.timestamp) + left_timediff;
-	if (timediff < 0) {
-		return;
-	}
+	uint64_t timediff = timestamp - psg->H.timestamp;
+	timediff -= timediff % (uint64_t)PSGPERMUL;
 
 #ifndef DEDI
 	if(G->no_draw) {
@@ -126,10 +122,9 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 			if(psg->period[ch] <= 1) {
 				continue;
 			}
-			for(uint64_t i = 0; i < timediff; i++) {
+			for(uint64_t i = 0; i < timediff; i+=PSGPERMUL) {
 				if(psg->poffs[ch] == 0) {
 					psg->poffs[ch] = psg->period[ch];
-					psg->poffs[ch] *= 16*3;
 					if(ch == 3) {
 						psg->poffs[ch] <<= 1;
 						psg->lfsr_offs += 1;
@@ -159,14 +154,13 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 			}
 		}
 
-		psg->H.timestamp = timestamp;
+		//psg->H.timestamp = timestamp;
+		psg->H.timestamp += timediff;
 		return;
 #ifndef DEDI
 	}
 
-	uint64_t i;
-	uint32_t j = 0;
-	for(i = 0; i < timediff; i+=(16*3)) {
+	for(uint64_t i = 0; i < timediff; i+=PSGPERMUL) {
 		int32_t outval = 0;
 		for(int ch = 0; ch < 4; ch++) {
 			if(psg->period[ch] <= 1) {
@@ -201,41 +195,47 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 			if(psg->poffs[ch] != 0) {
 				psg->poffs[ch] -= 1;
 			}
-			outval += (int32_t)(uint32_t)(psg->vol[ch] & psg->onstate[ch]);
 		}
-
-		// Apply HPF
-		//
-		// We don't know what the HPF strength is yet,
-		// but it doesn't really matter right now,
-		// as long as we have one that works.
-		outval <<= 8;
-		PSG_OUTHPF_CHARGE += (outval - PSG_OUTHPF_CHARGE)>>14;
-		outval -= PSG_OUTHPF_CHARGE;
-		outval += (1<<(9-1));
-		//outval >>= 9;
-		outval >>= 11;
+		int32_t main_outval = 0;
+		for(int ch = 0; ch < 4; ch++) {
+			main_outval += (int32_t)(uint32_t)(psg->vol[ch] & psg->onstate[ch]);
+		}
 
 		// Saturate
-		if(outval > 0x7FFF) { 
-			outval = 0x7FFF;
+		if(main_outval > 0x7FFF) {
+			main_outval = 0x7FFF;
 		}
-		if(outval < -0x8000) { 
-			outval = -0x8000;
+		if(main_outval < -0x8000) {
+			main_outval = -0x8000;
 		}
 
-		// Output and advance
-		PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
-		PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
-		j++;
+		for(int j = 0; j < PSGPERMUL; j++) {
+			outval = main_outval;
+
+			// Apply HPF
+			//
+			// We don't know what the HPF strength is yet,
+			// but it doesn't really matter right now,
+			// as long as we have one that works.
+			outval <<= 8;
+			PSG_OUTHPF_CHARGE += (outval - PSG_OUTHPF_CHARGE)>>14;
+			outval -= PSG_OUTHPF_CHARGE;
+			outval += (1<<(9-1));
+			//outval >>= 9;
+			outval >>= 11;
+
+			// Output and advance
+			PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
+			PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
+		}
 	}
 	SDL_LockAudio();
-	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, j);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, timediff);
 	SDL_UnlockAudio();
 	//assert(SDL_AtomicGet(&PSG_SOUND_DATA_LEN) < PSG_OUT_BUF_LEN);
-	left_timediff = timediff - i;
 
-	psg->H.timestamp = timestamp;
+	//psg->H.timestamp = timestamp;
+	psg->H.timestamp += timediff;
 #endif
 }
 
@@ -266,20 +266,20 @@ void PSGNAME(write)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state
 			case 0x0:
 				psg->period[0] &= 0x3F0;
 				psg->period[0] |= ((uint16_t)(val&0x0F));
-				//psg->poffs[0] = psg->period[0]*16*3;
+				//psg->poffs[0] = psg->period[0]*PSGPERMUL;
 				break;
 			case 0x2:
 				psg->period[1] &= 0x3F0;
 				psg->period[1] |= ((uint16_t)(val&0x0F));
-				//psg->poffs[1] = psg->period[1]*16*3;
+				//psg->poffs[1] = psg->period[1]*PSGPERMUL;
 				break;
 			case 0x4:
 				psg->period[2] &= 0x3F0;
 				psg->period[2] |= ((uint16_t)(val&0x0F));
-				//psg->poffs[2] = psg->period[2]*16*3;
+				//psg->poffs[2] = psg->period[2]*PSGPERMUL;
 				if((psg->lnoise&3) == 3) {
 					psg->period[3] = psg->period[2];
-					//psg->poffs[3] = psg->period[3]*16*3;
+					//psg->poffs[3] = psg->period[3]*PSGPERMUL;
 				}
 				break;
 
@@ -315,7 +315,7 @@ void PSGNAME(write)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state
 						psg->period[3] = psg->period[2];
 						break;
 				}
-				psg->poffs[3] = psg->period[3]*16*3;
+				psg->poffs[3] = psg->period[3];
 				break;
 		}
 
@@ -326,20 +326,17 @@ void PSGNAME(write)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state
 			case 0x0:
 				psg->period[0] &= 0x00F;
 				psg->period[0] |= ((uint16_t)(val&0x3F))<<4;
-				//psg->poffs[0] = psg->period[0]*16*3;
 				break;
 			case 0x2:
 				psg->period[1] &= 0x00F;
 				psg->period[1] |= ((uint16_t)(val&0x3F))<<4;
-				//psg->poffs[1] = psg->period[1]*16*3;
 				break;
 			case 0x4:
 				psg->period[2] &= 0x00F;
 				psg->period[2] |= ((uint16_t)(val&0x3F))<<4;
-				//psg->poffs[2] = psg->period[2]*16*3;
 				if((psg->lnoise&3) == 3) {
 					psg->period[3] = psg->period[2];
-					//psg->poffs[3] = psg->period[3]*16*3;
+					//psg->poffs[3] = psg->period[3]*PSGPERMUL;
 				}
 				break;
 
