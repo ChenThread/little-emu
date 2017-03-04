@@ -1,5 +1,10 @@
 #include "system/sms/all.h"
 
+#ifdef USE_GLOBAL_ROM
+extern uint8_t rom_buffer[];
+extern uint8_t rom_buffer_end[];
+#endif
+
 #define Z80_STATE_PARAMS struct EmuGlobal *H, struct EmuState *state
 #define Z80_STATE_ARGS H, state
 
@@ -30,10 +35,10 @@ void sms_z80_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t tim
 	if(G->rom_is_banked) {
 		if(addr >= 0xFFFC) {
 			// Sega mapper
-			sms->paging[(addr-1)&3] = val;
+			sms->paging[(addr-1)&3] = val & ((G->rom_len-1)>>14);
 		} else if((addr>>14) == 2) {
 			// Codemasters mapper
-			sms->paging[(addr>>14)&3] = val;
+			sms->paging[(addr>>14)&3] = val & ((G->rom_len-1)>>14);
 		}
 	}
 }
@@ -49,12 +54,20 @@ uint8_t sms_z80_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t t
 		return sms->ram[addr&0x1FFF];
 	} else if(addr < 0x0400 || !G->rom_is_banked) {
 		//printf("%04X raw\n", addr);
+#ifdef USE_GLOBAL_ROM
+		return rom_buffer[addr];
+#else
 		return G->rom[addr];
+#endif
 	} else {
 		uint32_t raddr0 = (uint32_t)(addr&0x3FFF);
 		uint32_t raddr1 = ((uint32_t)(sms->paging[(addr>>14)&3]))<<14;
 		uint32_t raddr = raddr0|raddr1;
+#ifdef USE_GLOBAL_ROM
+		return rom_buffer[raddr];
+#else
 		return G->rom[raddr];
+#endif
 	}
 }
 

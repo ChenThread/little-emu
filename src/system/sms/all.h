@@ -20,7 +20,9 @@
 #define USE_NTSC 0
 #endif
 
+#ifndef PSG_OUT_BUF_LEN
 #define PSG_OUT_BUF_LEN (1<<24)
+#endif
 
 #include "littleemu.h"
 #include "video/tms9918/all.h"
@@ -50,7 +52,13 @@ struct SMSGlobal
 	struct EmuRomHead rom_heads[2];
 
 	// SMS
+#ifndef USE_GLOBAL_ROM
+#ifdef SMS_ROM_SIZE
+	uint8_t rom[SMS_ROM_SIZE];
+#else
 	uint8_t rom[4*1024*1024];
+#endif
+#endif
 	size_t rom_len;
 	bool rom_is_banked;
 

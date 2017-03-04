@@ -1,5 +1,10 @@
 #include "system/sms/all.h"
 
+#ifdef USE_GLOBAL_ROM
+extern uint8_t rom_buffer[];
+extern uint8_t rom_buffer_end[];
+#endif
+
 const uint64_t lemu_core_frame_wait = FRAME_WAIT;
 
 const char lemu_core_name[] = "Sega Master System ("
@@ -98,16 +103,19 @@ void sms_run_frame(struct SMSGlobal *G, struct SMS *sms)
 
 static void sms_rom_load(struct SMSGlobal *G, const char *fname, const void *data, size_t len)
 {
-	memset(G->rom, 0xFF, sizeof(G->rom));
+	G->rom_is_banked = false;
+	G->rom_len = len;
 
+#ifndef USE_GLOBAL_ROM
+	memset(G->rom, 0xFF, sizeof(G->rom));
 	assert(len <= sizeof(G->rom));
 
 	// Copy ROM
-	G->rom_is_banked = false;
-	G->rom_len = len;
 	memcpy(G->rom, data, len);
+#endif
 
 	// Check if this is an SGC file
+#ifndef USE_GLOBAL_ROM
 	if(!memcmp(G->rom, "SGC\x1A", 4)) {
 		// It is - read header
 		printf("SGC file detected - creating player\n");
@@ -283,37 +291,42 @@ static void sms_rom_load(struct SMSGlobal *G, const char *fname, const void *dat
 
 		G->rom_is_banked = true;
 	}
+#endif
 
 	// TODO: handle other sizes
 	printf("ROM size: %08X\n", (int)G->rom_len);
 	if(G->rom_len <= 48*1024) {
 		// Unbanked
+#ifndef USE_GLOBAL_ROM
 		printf("Fill unbanked\n");
 		//memset(&G->rom[G->rom_len], 0xFF, sizeof(G->rom)-G->rom_len);
+#endif
 
 	} else {
 		// Banked
 		G->rom_is_banked = true;
-		if(G->rom_len <= 128*1024) {
+#ifndef USE_GLOBAL_ROM
+		if(sizeof(G->rom) >= 256*1024 && G->rom_len <= 128*1024) {
 			printf("Copy 128KB -> 256KB\n");
 			memcpy(&G->rom[128*1024], G->rom, 128*1024);
 		}
-		if(G->rom_len <= 256*1024) {
+		if(sizeof(G->rom) >= 512*1024 && G->rom_len <= 256*1024) {
 			printf("Copy 256KB -> 512KB\n");
 			memcpy(&G->rom[256*1024], G->rom, 256*1024);
 		}
-		if(G->rom_len <= 512*1024) {
+		if(sizeof(G->rom) >= 1*1024*1024 && G->rom_len <= 512*1024) {
 			printf("Copy 512KB -> 1MB\n");
 			memcpy(&G->rom[512*1024], G->rom, 512*1024);
 		}
-		if(G->rom_len <= 1*1024*1024) {
+		if(sizeof(G->rom) >= 2*1024*1024 && G->rom_len <= 1*1024*1024) {
 			printf("Copy 1MB -> 2MB\n");
 			memcpy(&G->rom[1*1024*1024], G->rom, 1*1024*1024);
 		}
-		if(G->rom_len <= 2*1024*1024) {
+		if(sizeof(G->rom) >= 4*1024*1024 && G->rom_len <= 2*1024*1024) {
 			printf("Copy 2MB -> 4MB\n");
 			memcpy(&G->rom[2*1024*1024], G->rom, 2*1024*1024);
 		}
+#endif
 	}
 }
 
@@ -365,7 +378,11 @@ static void sms_init_global(struct SMSGlobal *G, const char *fname, const void *
 
 	G->rom_heads[0] = (struct EmuRomHead){
 		.len = G->rom_len,
+#ifdef USE_GLOBAL_ROM
+		.ptr = rom_buffer,
+#else
 		.ptr = G->rom,
+#endif
 		.flags = 0,
 		.name = "Cartridge ROM",
 	};
@@ -384,6 +401,8 @@ struct EmuGlobal *lemu_core_global_new(const char *fname, const void *data, size
 	assert(data != NULL);
 	assert(len > 0);
 
+	//printf("Global size %08X\n", (uint32_t)sizeof(struct SMSGlobal));
+	//printf("State  size %08X\n", (uint32_t)sizeof(struct SMS));
 	struct SMSGlobal *G = malloc(sizeof(struct SMSGlobal));
 	assert(G != NULL);
 	sms_init_global(G, fname, data, len);

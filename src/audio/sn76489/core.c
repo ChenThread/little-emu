@@ -54,9 +54,9 @@ void PSGNAME(pop_16bit_mono)(int16_t *buf, size_t len)
 	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, -(src_len & ~(PSG_OUT_BUF_LEN-1)));
 	src_len &= (PSG_OUT_BUF_LEN-1);
 #if USE_NTSC
-	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*262*60*len)/48000/PSGPERMUL;
 #else
-	ssize_t ideal_samples_to_read = (228*3*313*50*len)/48000;
+	ssize_t ideal_samples_to_read = (228*3*313*50*len)/48000/PSGPERMUL;
 #endif
 	ssize_t samples_to_read = ideal_samples_to_read;
 	ssize_t samples_to_write = len;
@@ -116,6 +116,7 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 	timediff -= timediff % (uint64_t)PSGPERMUL;
 
 #ifndef DEDI
+	uint64_t timediff_reduced = timediff / (uint64_t)PSGPERMUL;
 	if(G->no_draw) {
 #endif
 		for(int ch = 0; ch < 4; ch++) {
@@ -223,14 +224,14 @@ void PSGNAME(run)(struct PSG *psg, struct EmuGlobal *G, struct EmuState *state, 
 			outval += (1<<(9-1));
 			//outval >>= 9;
 			outval >>= 11;
-
-			// Output and advance
-			PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
-			PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
 		}
+
+		// Output and advance
+		PSG_SOUND_DATA[PSG_SOUND_DATA_OFFS++] = outval;
+		PSG_SOUND_DATA_OFFS &= (PSG_OUT_BUF_LEN-1);
 	}
 	SDL_LockAudio();
-	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, timediff);
+	SDL_AtomicAdd(&PSG_SOUND_DATA_LEN, timediff_reduced);
 	SDL_UnlockAudio();
 	//assert(SDL_AtomicGet(&PSG_SOUND_DATA_LEN) < PSG_OUT_BUF_LEN);
 

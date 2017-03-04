@@ -81,15 +81,30 @@ void audio_callback_sdl(void *ud, Uint8 *stream, int len)
 }
 #endif
 
+#ifdef ROM_IS_PROVIDED
+extern uint8_t rom_buffer[];
+extern uint8_t rom_buffer_end[];
+#endif
+
 int main(int argc, char *argv[])
 {
+#ifndef ROM_IS_PROVIDED
 	assert(argc > 1);
 	FILE *fp = fopen(argv[1], "rb");
 	assert(fp != NULL);
+#ifdef ROM_BUFFER_SIZE
+	static uint8_t rom_buffer[ROM_BUFFER_SIZE];
+#else
 	static uint8_t rom_buffer[1024*1024*4];
+#endif
 	int rsiz = fread(rom_buffer, 1, sizeof(rom_buffer), fp);
 	assert(rsiz > 0);
+	fclose(fp);
+#else
+	int rsiz = (int)(rom_buffer_end - rom_buffer);
+#endif
 
+#ifndef STATIC_VER
 	// Load bot if available
 	if(argc > 2) {
 #ifdef DEDI
@@ -106,6 +121,7 @@ int main(int argc, char *argv[])
 		botlib_hook_input = SDL_LoadFunction(botlib, "bot_hook_input");
 #endif
 	}
+#endif
 
 	if(botlib_hook_input == NULL) {
 		botlib_hook_input = input_fetch;
