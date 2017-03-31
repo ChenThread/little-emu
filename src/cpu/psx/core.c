@@ -1,16 +1,5 @@
 //include "cpu/psx/all.h"
 
-const int CAUSE_Int  = 0x00;
-const int CAUSE_AdEL = 0x04;
-const int CAUSE_AdES = 0x05;
-const int CAUSE_IBE  = 0x06;
-const int CAUSE_DBE  = 0x07;
-const int CAUSE_Sys  = 0x08;
-const int CAUSE_Bp   = 0x09;
-const int CAUSE_RI   = 0x0A;
-const int CAUSE_CpU  = 0x0B;
-const int CAUSE_Ov   = 0x0C;
-
 void MIPSNAME(reset)(struct MIPS *mips)
 {
 	// NOTE: in reality these don't get cleared
@@ -20,6 +9,9 @@ void MIPSNAME(reset)(struct MIPS *mips)
 		mips->gtereg[i] = 0;
 		mips->gtectl[i] = 0;
 	}
+
+	// SR
+	mips->cop0reg[0x0C] |= (1<<22);
 
 	mips->pc = 0xBFC00000;
 	mips->pc_diff1 = 4;
@@ -31,23 +23,55 @@ void MIPSNAME(reset)(struct MIPS *mips)
 	//MIPS_ADD_CYCLES(mips, 1);
 }
 
-static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr);
-
-static void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause, uint32_t op_pc)
+void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 {
-	printf("FAULT %02X %08X\n", cause, op_pc);
+	printf("FAULT %02X %08X\n", cause, mips->op_pc);
 	if(cause == CAUSE_RI) {
-		uint32_t op = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, op_pc);
-		uint32_t otyp = (op>>26);
-		printf("RI %08X %02X\n", op, otyp);
+		uint32_t otyp = (mips->op>>26);
+		printf("RI %08X %02X\n", mips->op, otyp);
 	}
-	fflush(stdout);
-	abort();
+
+	mips->lsreg = -1;
+	mips->lsop = 0;
+
+	// TODO fill cause in properly
+	mips->cop0reg[0x0D] &= ~0x8000007C;
+	mips->cop0reg[0x0D] |= ((cause&0x1F)<<2);
+
+	// FIXME this is actually cheating
+	if(mips->pc_diff1 != 4) {
+		mips->cop0reg[0x0D] |= 0x80000000;
+		mips->cop0reg[0x0E] = mips->pc - 4;
+	} else {
+		mips->cop0reg[0x0E] = mips->pc;
+	}
+
+	//if(cause == CAUSE_Ov) { return; }
+	mips->fault_fired = true;
+	//if(cause == CAUSE_AdEL) { return; }
+
+	mips->cop0reg[0x0C] &= ~0x30;
+	mips->cop0reg[0x0C] |= (mips->cop0reg[0x0C] & 0x0F)<<2;
+	mips->cop0reg[0x0C] &= ~0x03;
+
+	mips->pc = ((mips->cop0reg[0x0C]&(1<<22)) == 0
+		? 0x80000080
+		: 0xBFC00180);
+	mips->pc_diff1 = 4;
+	//printf("NEW PC: %08X\n", mips->pc);
 }
 
 static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
 {
 	// TODO cache stuff
+	// TODO add a latch to this
+	if(addr == 0xFFFE0130) {
+		// TODO!
+		int ret = 0;
+		printf("INTERN1 R -> %08X\n", ret);
+		return ret;
+	}
+
 	uint32_t v = MIPSNAME(mem_read)(MIPS_STATE_ARGS,
 		mips->H.timestamp,
 		addr & 0x1FFFFFFF,
@@ -56,9 +80,59 @@ static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS
 	return v;
 }
 
+static uint32_t MIPSNAME(mem_read32_l)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t oldval)
+{
+	uint32_t mask = (0xFFFFFFFF<<(((~addr)&3)<<3));
+	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr&~3);
+	v <<= ((~addr)&3)<<3;
+	return (v&mask)|(oldval&~mask);
+}
+
+static uint32_t MIPSNAME(mem_read32_r)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t oldval)
+{
+	uint32_t mask = (0xFFFFFFFF>>((addr&3)<<3));
+	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr&~3);
+	v >>= (addr&3)<<3;
+	return (v&mask)|(oldval&~mask);
+}
+
+static uint32_t MIPSNAME(mem_read32)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
+{
+	if((addr & 0x3) != 0) {
+		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
+		return 0xFFFFFFFF;
+	}
+
+	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr);
+	return v;
+}
+
+static uint32_t MIPSNAME(mem_read16)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
+{
+	if((addr & 0x1) != 0) {
+		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
+		return 0xFFFFFFFF;
+	}
+
+	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr);
+	return (uint32_t)(int32_t)(int16_t)(v >> ((addr&2)<<3));
+}
+
+static uint32_t MIPSNAME(mem_read8)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
+{
+	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr);
+	return (uint32_t)(int32_t)(int8_t)(v >> ((addr&3)<<3));
+}
+
 static void MIPSNAME(mem_write32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t latch, uint32_t val)
 {
 	// TODO cache stuff
+	if(addr == 0xFFFE0130) {
+		// TODO!
+		printf("INTERN1 W %08X\n", val);
+		return;
+	}
+
 	MIPSNAME(mem_write)(MIPS_STATE_ARGS,
 		mips->H.timestamp,
 		addr & 0x1FFFFFFF,
@@ -112,6 +186,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		//
 		// HLE. THIS IS CANCER. FIXME THIS IS CANCER HLE IS CANCER FIX THIS CANCER DO IT RIGHT INSTEAD OF HLE-ING IT
 		//
+#if 1
 		if((mips->pc&0x1FFFFFFF) == 0xA0) {
 			switch(mips->gpr[9]&0xFFFF) {
 				case 0x3E: // puts(fmt, ...)
@@ -137,22 +212,28 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 			printf("HLE: C0 %08X\n", mips->gpr[9]);
 			abort();
 		}
+#endif
 
 		// Fetch
-		uint32_t op_pc = mips->pc;
-		uint32_t op = MIPSNAME(fetch_op_x)(mips, MIPS_STATE_ARGS);
+		mips->fault_fired = false;
+		mips->op_pc = mips->pc;
+		mips->op = MIPSNAME(fetch_op_x)(mips, MIPS_STATE_ARGS);
+		if(mips->fault_fired) {
+			printf("FIX YOUR SHIT %08X\n", mips->pc);
+			continue;
+		}
 
 		// Clear r0
 		mips->gpr[GPR_ZERO] = 0;
 
-		//printf("%08X %08X %04X\n", op_pc, op, mips->gpr[GPR_SP]);
+		//printf("%08X %08X %08X\n", mips->op_pc, mips->op, mips->gpr[GPR_SP]);
 	
-		int rs = (op>>21)&0x1F;
-		int rt = (op>>16)&0x1F;
-		int rd = (op>>11)&0x1F;
-		int sa = (op>>6)&0x1F;
-		int ofunc = op&0x3F;
-		int otyp = (op>>26)&0x3F;
+		int rs = (mips->op>>21)&0x1F;
+		int rt = (mips->op>>16)&0x1F;
+		int rd = (mips->op>>11)&0x1F;
+		int sa = (mips->op>>6)&0x1F;
+		int ofunc = mips->op&0x3F;
+		int otyp = (mips->op>>26)&0x3F;
 
 		// Decode
 		if(otyp == 0) switch(ofunc) {
@@ -176,7 +257,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 
 			case 0x09: // JALR
-				mips->gpr[rd] = op_pc + 8;
+				mips->gpr[rd] = mips->op_pc + 8;
 				// FALL THROUGH
 			case 0x08: // JR
 				//printf("JUMP %08X %d\n", mips->gpr[rs], rs);
@@ -186,72 +267,58 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 
 			case 0x0C: // SYSCALL
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Sys, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Sys);
 				break;
 			case 0x0D: // BREAK
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Bp, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Bp);
 				break;
 
 			case 0x10: // MFHI
-				//printf("MFHI %08X\n", op_pc);
+				//printf("MFHI %08X\n", mips->op_pc);
 				mips->gpr[rd] = mips->rhi;
 				break;
 			case 0x11: // MTHI
-				//printf("MTHI %08X\n", op_pc);
+				//printf("MTHI %08X\n", mips->op_pc);
 				mips->rhi = mips->gpr[rs];
 				break;
 			case 0x12: // MFLO
-				//printf("MFLO %08X\n", op_pc);
+				//printf("MFLO %08X\n", mips->op_pc);
 				mips->gpr[rd] = mips->rlo;
 				break;
 			case 0x13: // MTLO
-				//printf("MTLO %08X\n", op_pc);
+				//printf("MTLO %08X\n", mips->op_pc);
 				mips->rlo = mips->gpr[rs];
 				break;
 
+			// Because we actually have 64-bit ints in C,
+			// as opposed to only having 32-bit ints in GLSL 4.30,
+			// this part is a bit nicer.
 			case 0x18: // MUL
 				{
-					int32_t iva = mips->gpr[rs];
-					int32_t ivb = mips->gpr[rt];
-					uint32_t va = (iva < 0 ? -iva : iva);
-					uint32_t vb = (ivb < 0 ? -ivb : ivb);
+					int64_t va = (int64_t)(int32_t)mips->gpr[rs];
+					int64_t vb = (int64_t)(int32_t)mips->gpr[rt];
+					int64_t cmbres = (va*vb);
 
-					uint32_t al = (va&0xFFFFU);
-					uint32_t ah = ((va>>16U)&0xFFFFU);
-					uint32_t bl = (vb&0xFFFFU);
-					uint32_t bh = ((vb>>16U)&0xFFFFU);
-
-					uint32_t mll = al*bl;
-					uint32_t mlh = al*bh;
-					uint32_t mhl = ah*bl;
-					uint32_t mhh = ah*bh;
-
-					mips->rlo = (int32_t)(mll + ((mlh+mhl)<<16U));
-					mips->rhi = (int32_t)(((mlh+mhl+(mll>>16U))>>16U)+mhh);
-					// FIXME verify
-					if((iva < 0) != (ivb < 0)) {
-						mips->rhi = -mips->rhi;
-						if(mips->rlo > 0) { mips->rhi--; }
-						mips->rlo = -mips->rlo;
-					}
+					mips->rlo = (uint32_t)(uint64_t)(cmbres);
+					mips->rhi = (uint32_t)(uint64_t)(cmbres>>32ULL);
+#if 0
+				printf("%08X %08X %08X %08X %08X\n"
+					, mips->gpr[rs]
+					, mips->gpr[rt]
+					, mips->rlo
+					, mips->rhi
+					, mips->op_pc
+				);
+#endif
 				}
 			case 0x19: // MULU
 				{
-					uint32_t va = mips->gpr[rs];
-					uint32_t vb = mips->gpr[rt];
+					uint64_t va = (uint64_t)(uint32_t)mips->gpr[rs];
+					uint64_t vb = (uint64_t)(uint32_t)mips->gpr[rt];
+					uint64_t cmbres = (va*vb);
 
-					uint32_t al = (va&0xFFFFU);
-					uint32_t ah = ((va>>16U)&0xFFFFU);
-					uint32_t bl = (vb&0xFFFFU);
-					uint32_t bh = ((vb>>16U)&0xFFFFU);
-
-					uint32_t mll = al*bl;
-					uint32_t mlh = al*bh;
-					uint32_t mhl = ah*bl;
-					uint32_t mhh = ah*bh;
-
-					mips->rlo = (int32_t)(mll + ((mlh+mhl)<<16U));
-					mips->rhi = (int32_t)(((mlh+mhl+(mll>>16U))>>16U)+mhh);
+					mips->rlo = (uint32_t)(uint64_t)(cmbres);
+					mips->rhi = (uint32_t)(uint64_t)(cmbres>>32ULL);
 				}
 				break;
 
@@ -259,11 +326,21 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				if(mips->gpr[rt] == 0) {
 					// DIV BY ZERO
 					mips->rhi = mips->gpr[rs];
-					mips->rlo = (mips->gpr[rs] < 0 ? 1 : -1);
+					mips->rlo = ((int32_t)mips->gpr[rs] < 0 ? 1 : -1);
 				} else {
-					mips->rhi = mips->gpr[rs] % mips->gpr[rt];
-					mips->rlo = mips->gpr[rs] / mips->gpr[rt];
+					mips->rhi = ((int64_t)(int32_t)mips->gpr[rs]) % (int64_t)(int32_t)mips->gpr[rt];
+					mips->rlo = ((int64_t)(int32_t)mips->gpr[rs]) / (int64_t)(int32_t)mips->gpr[rt];
 				}
+#if 0
+				static int div_counter = 0;
+				printf("%5d %08X %08X %08X %08X\n"
+					, div_counter++
+					, mips->gpr[rs]
+					, mips->gpr[rt]
+					, mips->rlo
+					, mips->rhi
+				);
+#endif
 				break;
 			case 0x1B: // DIVU
 				if(mips->gpr[rt] == 0) {
@@ -271,17 +348,37 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->rhi = mips->gpr[rs];
 					mips->rlo = -1;
 				} else {
-					mips->rhi = (int32_t)((uint32_t)(mips->gpr[rs]) % (uint32_t)(mips->gpr[rt]));
-					mips->rlo = (int32_t)((uint32_t)(mips->gpr[rs]) / (uint32_t)(mips->gpr[rt]));
+					mips->rhi = ((uint32_t)(mips->gpr[rs]) % (uint32_t)(mips->gpr[rt]));
+					mips->rlo = ((uint32_t)(mips->gpr[rs]) / (uint32_t)(mips->gpr[rt]));
 				}
 				break;
 
 			// TODO: overflow traps
 			case 0x20: // ADD
+				{
+					uint32_t va = mips->gpr[rs];
+					uint32_t vb = mips->gpr[rt];
+					uint32_t vr = va + vb;
+					if(((va^vb)>>31) == 0 && ((vr^va)>>31) != 0) {
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
+					} else {
+						mips->gpr[rd] = vr;
+					}
+				} break;
 			case 0x21: // ADDU
 				mips->gpr[rd] = mips->gpr[rs] + mips->gpr[rt];
 				break;
 			case 0x22: // SUB
+				{
+					uint32_t va = mips->gpr[rs];
+					uint32_t vb = mips->gpr[rt];
+					uint32_t vr = va - vb;
+					if(((va^vb)>>31) != 0 && ((vr^va)>>31) != 0) {
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
+					} else {
+						mips->gpr[rd] = vr;
+					}
+				} break;
 			case 0x23: // SUBU
 				mips->gpr[rd] = mips->gpr[rs] - mips->gpr[rt];
 				break;
@@ -300,7 +397,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 
 			case 0x2A: // SLT
-				mips->gpr[rd] = (mips->gpr[rs] < mips->gpr[rt] ? 1 : 0);
+				mips->gpr[rd] = ((int32_t)mips->gpr[rs] < (int32_t)mips->gpr[rt] ? 1 : 0);
 				break;
 			case 0x2B: // SLTU
 				mips->gpr[rd] = ((uint32_t)(mips->gpr[rs]) < (uint32_t)(mips->gpr[rt]) ? 1 : 0);
@@ -308,39 +405,39 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 
 			default:
 				// RI
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 				break;
 		} else if(otyp == 0x01) switch(rt) {
 			case 0x00: // BLTZ
-				if(mips->gpr[rs] < 0) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+				if((int32_t)mips->gpr[rs] < 0) {
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x01: // BGEZ
-				if(mips->gpr[rs] >= 0) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+				if((int32_t)mips->gpr[rs] >= 0) {
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x10: // BLTZAL
-				if(mips->gpr[rs] < 0) {
-					mips->gpr[31] = op_pc + 8;
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+				if((int32_t)mips->gpr[rs] < 0) {
+					mips->gpr[31] = mips->op_pc + 8;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x11: // BGEZAL
-				if(mips->gpr[rs] >= 0) {
-					mips->gpr[31] = op_pc + 8;
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+				if((int32_t)mips->gpr[rs] >= 0) {
+					mips->gpr[31] = mips->op_pc + 8;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 
 			default:
 				// RI
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 				break;
 
 		} else if(otyp == 0x10) switch(rs) {
@@ -381,7 +478,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					default:
 						// RI
 						printf("rd mfc %02X\n", rd);
-						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 						break;
 
 				} break;
@@ -432,13 +529,13 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					default:
 						// RI
 						printf("rd mtc %02X\n", rd);
-						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 						break;
 
 				} break;
 
 			case 0x10: // COP0
-				switch(op&0x3F) {
+				switch(mips->op&0x3F) {
 					case 0x10: // RFE
 						mips->cop0reg[0x0C] = (mips->cop0reg[0x0C]&~0x0F)
 							| ((mips->cop0reg[0x0C]>>2)&0x0F);
@@ -446,8 +543,8 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 
 					default:
 						// RI
-						printf("cop0 %02X\n", (op&0x3F));
-						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+						printf("cop0 %02X\n", (mips->op&0x3F));
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 						break;
 
 				} break;
@@ -455,106 +552,123 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 			default:
 				// RI
 				printf("rs %02X\n", rs);
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 				break;
 		} else switch(otyp) {
 			case 0x03: // JAL
-				mips->gpr[31] = op_pc + 8;
+				mips->gpr[31] = mips->op_pc + 8;
 				// FALL THROUGH
 			case 0x02: // J
-				mips->pc_diff1 = (op_pc&0xF0000000)|((op&0x3FFFFFF)<<2);
+				mips->pc_diff1 = (mips->op_pc&0xF0000000)|((mips->op&0x3FFFFFF)<<2);
 				mips->pc_diff1 -= mips->pc;
 				//xcomms |= 0x10;
 				break;
 
 			case 0x04: // BEQ
 				if(mips->gpr[rs] == mips->gpr[rt]) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x05: // BNE
 				if(mips->gpr[rs] != mips->gpr[rt]) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x06: // BLEZ
 				if(mips->gpr[rs] <= 0) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 			case 0x07: // BGTZ
 				if(mips->gpr[rs] > 0) {
-					mips->pc_diff1 = ((int32_t)(int16_t)op)<<2;
+					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					//xcomms |= 0x10;
 				}
 				break;
 
-			// TODO: overflow traps
 			case 0x08: // ADDI
+				{
+					uint32_t va = mips->gpr[rs];
+					uint32_t vb = (uint32_t)(int32_t)(int16_t)mips->op;
+					uint32_t vr = va + vb;
+					if(((va^vb)>>31) == 0 && ((vr^va)>>31) != 0) {
+						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
+					} else {
+						mips->gpr[rt] = vr;
+					}
+				} break;
+
 			case 0x09: // ADDIU
-				mips->gpr[rt] = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->gpr[rt] = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				break;
 			case 0x0A: // SLTI
-				mips->gpr[rt] = ((int32_t)mips->gpr[rs] < (int32_t)(int16_t)(int32_t)op ? 1 : 0);
+				mips->gpr[rt] = ((int32_t)mips->gpr[rs] < (int32_t)(int16_t)(int32_t)mips->op ? 1 : 0);
 				break;
 			case 0x0B: // SLTIU
-				mips->gpr[rt] = ((uint32_t)(mips->gpr[rs]) < (uint32_t)(op&0xFFFF) ? 1 : 0);
+				mips->gpr[rt] = (((uint32_t)(mips->gpr[rs]) < (uint32_t)((int32_t)(int16_t)mips->op)) ? 1 : 0);
 				break;
 
 			case 0x0C: // ANDI
-				mips->gpr[rt] = mips->gpr[rs] & (op&0xFFFF);
+				mips->gpr[rt] = mips->gpr[rs] & (mips->op&0xFFFF);
 				break;
 			case 0x0D: // ORI
-				mips->gpr[rt] = mips->gpr[rs] | (op&0xFFFF);
+				mips->gpr[rt] = mips->gpr[rs] | (mips->op&0xFFFF);
 				break;
 			case 0x0E: // XORI
-				mips->gpr[rt] = mips->gpr[rs] ^ (op&0xFFFF);
+				mips->gpr[rt] = mips->gpr[rs] ^ (mips->op&0xFFFF);
 				break;
 			case 0x0F: // LUI
-				mips->gpr[rt] = (op&0xFFFF)<<16;
+				mips->gpr[rt] = (mips->op&0xFFFF)<<16;
 				break;
 
-			// TODO: AdEL
 			case 0x20: // LB
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = rt;
 				break;
 			case 0x21: // LH
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
+				mips->lsreg = rt;
+				break;
+			case 0x22: // LWL
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = rt;
 				break;
 			case 0x23: // LW
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = rt;
 				break;
 			case 0x24: // LBU
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = rt;
 				break;
 			case 0x25: // LHU
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
+				mips->lsreg = rt;
+				break;
+			case 0x26: // LWR
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = rt;
 				break;
 
 			case 0x28: // SB
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = -2-rt;
 				break;
 			case 0x29: // SH
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = -2-rt;
 				break;
 			case 0x2B: // SW
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)op;
+				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
 				mips->lsreg = -2-rt;
 				break;
 
 			default:
 				// RI
-				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI, op_pc);
+				MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_RI);
 				break;
 		}
 
@@ -566,8 +680,8 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		if(mips->lsreg <= -2) {
 			// Store
 			mips->lsreg = -2-mips->lsreg;
-			//if((c0_regs[0x0C] & 0x10000) == 0) {
-			{
+			if((mips->cop0reg[0x0C] & 0x10000) == 0) {
+				// TODO: handle the isolated cache variant properly
 				int mask = 0;
 				int v = mips->gpr[mips->lsreg];
 				int shift = 0;
@@ -585,7 +699,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						mask = 0xFFFFFFFF;
 						break;
 				}
-				MIPSNAME(mem_write32_direct)(mips, MIPS_STATE_ARGS, mips->lsaddr, (v&mask)<<shift, mask<<shift);
+				MIPSNAME(mem_write32_direct)(mips, MIPS_STATE_ARGS, mips->lsaddr, mask<<shift, (v&mask)<<shift);
 			}
 			mips->lsreg = -1;
 			continue;
@@ -594,30 +708,40 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		// Fetch op or thing to load
 		if(mips->lsreg >= 0) {
 			// Load
-			int vread = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->lsreg>=0 ? mips->lsaddr : mips->pc);
+			mips->fault_fired = false;
 			int v = 0;
-			//if((c0_regs[0x0C] & 0x10000) == 0) {
-			{
-				v = vread;
+			if((mips->cop0reg[0x0C] & 0x10000) == 0) {
+				// TODO: handle the isolated cache variant properly
 				switch(mips->lsop) {
 					case 0x20: // LB
-						v = (uint32_t)(int32_t)(int8_t)(v>>(mips->lsaddr&3));
+						v = MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS, mips->lsaddr);
 						break;
 					case 0x21: // LH
-						v = (uint32_t)(int32_t)(int16_t)(v>>(mips->lsaddr&2));
+						//printf("LH %08X %08X\n", mips->op_pc, mips->lsaddr);
+						v = MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS, mips->lsaddr);
+						break;
+					case 0x22: // LWL
+						v = MIPSNAME(mem_read32_l)(mips, MIPS_STATE_ARGS, mips->lsaddr, mips->gpr[mips->lsreg]);
 						break;
 					case 0x23: // LW
-						v = v;
+						v = MIPSNAME(mem_read32)(mips, MIPS_STATE_ARGS, mips->lsaddr);
 						break;
 					case 0x24: // LBU
-						v = (v>>((mips->lsaddr&3)<<3))&0xFF;
+						v = MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS, mips->lsaddr);
+						v = (uint32_t)(uint8_t)v;
 						break;
 					case 0x25: // LHU
-						v = (v>>((mips->lsaddr&2)<<3))&0xFFFF;
+						v = MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS, mips->lsaddr);
+						v = (uint32_t)(uint16_t)v;
+						break;
+					case 0x26: // LWR
+						v = MIPSNAME(mem_read32_r)(mips, MIPS_STATE_ARGS, mips->lsaddr, mips->gpr[mips->lsreg]);
 						break;
 				}
 			}
-			mips->gpr[mips->lsreg] = v;
+			if(!mips->fault_fired) {
+				mips->gpr[mips->lsreg] = v;
+			}
 			mips->lsreg = -1;
 			continue;
 		}

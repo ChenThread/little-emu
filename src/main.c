@@ -143,11 +143,13 @@ int main(int argc, char *argv[])
 	// Set up video
 	Gsurface = lemu_surface_new(Gbase);
 
+	int gscale_w = (Gsurface->width*2 >= 1360 ? 1 : 2);
+	int gscale_h = (Gsurface->height*2 >= 768 ? 1 : 2);
 	window = SDL_CreateWindow(window_title_buf,
 		SDL_WINDOWPOS_CENTERED,
 		SDL_WINDOWPOS_CENTERED,
-		Gsurface->width * 2,
-		Gsurface->height * 2,
+		Gsurface->width * gscale_w,
+		Gsurface->height * gscale_h,
 		0);
 	renderer = SDL_CreateSoftwareRenderer(SDL_GetWindowSurface(window));
 

@@ -10,7 +10,7 @@ const char lemu_core_name[] = "Sony PlayStation ("
 #endif
 ", "
 
-"SCPH-900"
+"SCPH-550"
 #if USE_NTSC
 "1"
 #else
@@ -18,15 +18,32 @@ const char lemu_core_name[] = "Sony PlayStation ("
 #endif
 ")";
 
+#if USE_NTSC
+#define PSX_BIOS_FILE "sysroms/scph5501.bin"
+#else
+#define PSX_BIOS_FILE "sysroms/scph5502.bin"
+#endif
+
+#if 1
+// I love this hack. --GM
+extern const uint32_t psx_bios_data[512<<8];
+//extern const uint32_t psx_bios_data[];
+asm (
+	".global psx_bios_data\n"
+	"psx_bios_data: .incbin \"" PSX_BIOS_FILE "\"\n"
+);
+#else
+uint32_t psx_bios_data[512<<8];
+#endif
+
 const char *lemu_core_inputs_global[1] = {
 	NULL
 };
 const char *lemu_core_inputs_player[17] = {
-	// TODO!
-	"Up", "Down", "Left", "Right",
-	"Up", "Down", "Left", "Right",
-	"Up", "Down", "Left", "Right",
-	"Up", "Down", "Left", "Right",
+	"Select", "L3", "R3", "Start",
+	"Up", "Right", "Down", "Left",
+	"L2", "R2", "L1", "R1",
+	"Triangle", "Circle", "X", "Square",
 	NULL
 };
 
@@ -39,7 +56,7 @@ void psx_init(struct PSXGlobal *G, struct PSX *psx)
 	psx->joy[0].buttons = 0xFFFF;
 	psx->joy[1].buttons = 0xFFFF;
 	psx_mips_init(&(G->H), &(psx->mips));
-	//psx_gpu_init(&(G->H), &(psx->gpu));
+	psx_gpu_init(&(G->H), &(psx->gpu));
 	//psx_spu_init(&(G->H), &(psx->spu));
 	//psx->mips.H.timestamp = 1;
 	//psx->gpu.H.timestamp = 0;
@@ -59,9 +76,13 @@ void psx_init(struct PSXGlobal *G, struct PSX *psx)
 	assert(dest_end <= sizeof(psx->ram));
 
 	memcpy(((uint8_t *)(psx->ram))+dest_beg, G->rom+0x800, fsize);
+	(void)init_sp;
+	(void)init_gp;
+#if 1
 	psx->mips.pc = init_pc;
 	psx->mips.gpr[GPR_GP] = init_gp;
 	psx->mips.gpr[GPR_SP] = init_sp;
+#endif
 }
 
 void psx_copy(struct PSX *dest, struct PSX *src)
@@ -79,8 +100,8 @@ void psx_run(struct PSXGlobal *G, struct PSX *psx, uint64_t timestamp)
 	while(TIME_IN_ORDER(psx->mips.H.timestamp_end, timestamp)) {
 		psx->mips.H.timestamp_end = timestamp;
 		psx_mips_run(&(psx->mips), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
-		//psx_vdp_run(&(psx->vdp), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
-		//psx_psg_run(&(psx->psg), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
+		psx_gpu_run(&(psx->gpu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
+		//psx_spu_run(&(psx->spu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 	}
 
 	psx->H.timestamp = timestamp;
@@ -91,7 +112,7 @@ void psx_run_frame(struct PSXGlobal *G, struct PSX *psx)
 	// Run a frame
 	//
 	//psx_run(G, psx, psx->H.timestamp + 684*SCANLINES-pt_VINT1);
-	psx_run(G, psx, psx->H.timestamp + 3406*7*314/11);
+	psx_run(G, psx, psx->H.timestamp + VCLKS_WIDE*7*SCANLINES);
 
 	//psx_copy(&psx_prev, &psx_current);
 }
@@ -224,7 +245,7 @@ void lemu_core_audio_callback(struct EmuGlobal *G, void *state, uint8_t *stream,
 
 void lemu_core_surface_configure(struct EmuGlobal *G, struct EmuSurface *S)
 {
-	S->width = 342;
+	S->width = PIXELS_WIDE;
 	S->height = SCANLINES;
 	S->format = EMU_SURFACE_FORMAT_BGRA_32;
 }
@@ -233,14 +254,14 @@ void lemu_core_video_callback(struct EmuGlobal *G, struct EmuSurface *S)
 {
 	for(int y = 0; y < SCANLINES; y++) {
 		uint32_t *pp = (uint32_t *)(((uint8_t *)S->pixels) + S->pitch*y);
-		for(int x = 0; x < 342; x++) {
-			//uint32_t v = ((struct PSXGlobal *)G)->frame_data[y][x];
-			uint32_t v = 0x00FFFFFF;
-			//uint32_t r = ((v>>0)&3)*0x55;
-			//uint32_t g = ((v>>2)&3)*0x55;
-			//uint32_t b = ((v>>4)&3)*0x55;
-			//pp[x] = (b<<24)|(g<<16)|(r<<8);
-			pp[x] = v;
+		for(int x = 0; x < PIXELS_WIDE; x++) {
+			uint32_t v = ((struct PSXGlobal *)G)->frame_data[y][x];
+			//uint32_t v = 0x00FFFFFF;
+			uint32_t r = ((v>>0)&0xFF);
+			uint32_t g = ((v>>8)&0xFF);
+			uint32_t b = ((v>>16)&0xFF);
+			pp[x] = (b<<24)|(g<<16)|(r<<8);
+			//pp[x] = v;
 		}
 	}
 }

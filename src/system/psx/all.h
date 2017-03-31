@@ -20,21 +20,8 @@
 #define USE_NTSC 0
 #endif
 
-// TODO get video working
-#if USE_NTSC
-#define SCANLINES 263
-#define VCLKS_WIDE 3413
-#else
-#define SCANLINES 314
-#define VCLKS_WIDE 3406
-#endif
-
-#define PIXELS_STEP (4)
-#define PIXELS_WIDE ((VCLKS_WIDE)/(PIXELS_STEP))
-#define FRAME_WAIT ((int)((44100*0x300*11)/(7*VCLKS_WIDE*SCANLINES)))
-
 #include "littleemu.h"
-//include "video/psx/all.h"
+#include "video/psx/all.h"
 //include "audio/psx/all.h"
 #include "cpu/psx/all.h"
 
@@ -52,10 +39,8 @@ struct PSX
 	struct EmuState H;
 	uint32_t ram[2048<<8];
 	uint32_t scratch[1024>>2];
-	//uint16_t vram[1024<<9];
-	//uint16_t spuram[512<<9];
 	struct MIPS mips;
-	//struct GPU gpu;
+	struct GPU gpu;
 	//struct SPU spu;
 	struct PSXJoy joy[2];
 } __attribute__((__packed__));
@@ -74,10 +59,10 @@ struct PSXGlobal
 	size_t rom_len;
 
 	// GPU
-	// TODO!
-	uint32_t frame_data[SCANLINES][VCLKS_WIDE];
+	uint32_t frame_data[SCANLINES][PIXELS_WIDE];
 
 	// SPU
+	// TODO!
 };
 
 // psx.c
@@ -96,11 +81,15 @@ uint16_t psx_spu_read16(struct SPU *spu, struct EmuGlobal *G, struct EmuState *s
 uint32_t psx_spu_read32(struct SPU *spu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t addr);
 void psx_spu_write16(struct SPU *spu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint16_t val);
 void psx_spu_write32(struct SPU *spu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t val);
+#endif
 
 // gpu.c
-void psx_gpu_run(struct GPU *vdp, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
-void psx_gpu_init(struct EmuGlobal *G, struct GPU *vdp);
-#endif
+void psx_gpu_run(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+void psx_gpu_init(struct EmuGlobal *G, struct GPU *gpu);
+uint32_t psx_gpu_read_gp0(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+uint32_t psx_gpu_read_gp1(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp);
+void psx_gpu_write_gp0(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t val);
+void psx_gpu_write_gp1(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t val);
 
 // psx.c
 void psx_mips_reset(struct MIPS *mips);

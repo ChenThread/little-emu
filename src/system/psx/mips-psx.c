@@ -5,7 +5,11 @@
 
 #define MIPSNAME(n) psx_mips_##n
 
-#define MIPS_ADD_CYCLES(mips, v) (mips)->H.timestamp += ((v)*7)
+#define MIPS_ADD_CYCLES(mips, v) (mips)->H.timestamp += ((v)*11)
+
+void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause);
+
+extern const uint32_t psx_bios_data[512<<8];
 
 void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t latch, uint32_t val)
 {
@@ -13,17 +17,27 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 	//struct PSXGlobal *G = (struct PSXGlobal *)H;
 
 	// TODO: emulate memory control register
-	if(addr < 0x800000) {
+	if((addr&0xFFE00000) == 0x00000000) {
+	//if((addr&0xFF800000) == 0x00000000) {
+		//printf("W ram\n");
 		MIPS_ADD_CYCLES(&(psx->mips), 6);
 		uint32_t *v = &(psx->ram[(addr&0x1FFFFC)>>2]);
 		*v = (*v & ~latch) | (val & latch);
-	} else if(addr >= 0x1F800000 && addr <= 0x1F8003FF) {
+
+	} else if((addr&0xFFFFFC00) == 0x1F800000) {
+		//printf("W scratch\n");
 		uint32_t *v = &(psx->scratch[(addr&0x3FC)>>2]);
 		*v = (*v & ~latch) | (val & latch);
+
+	} else if((addr&0xFFFF0000) == 0x1F800000) {
+		// TODO: I/O
+		printf("W %08X %08X %08X\n", latch, addr, val);
+	} else if((addr&0xFFFF0000) == 0x1FA00000) {
+		// EXP1 - TODO memcontrol region
+	} else {
+		// TODO: trap
+		printf("W TRAP %08X %08X %08X\n", latch, addr, val);
 	}
-
-
-	// TODO: I/O
 }
 
 uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t latch)
@@ -32,18 +46,29 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 	//struct PSXGlobal *G = (struct PSXGlobal *)H;
 
 	// TODO: emulate memory control register
-	if(addr < 0x800000) {
+	if((addr&0xFFE00000) == 0x00000000) {
+	//if((addr&0xFF800000) == 0x00000000) {
 		MIPS_ADD_CYCLES(&(psx->mips), 6);
 		return psx->ram[(addr&0x1FFFFC)>>2];
-	} else if(addr >= 0x1F800000 && addr <= 0x1F8003FF) {
-		MIPS_ADD_CYCLES(&(psx->mips), 6);
+	} else if((addr&0xFFFFFC00) == 0x1F800000) {
 		return psx->scratch[(addr&0x3FC)>>2];
+	} else if(addr >= 0x1FC00000) {
+		MIPS_ADD_CYCLES(&(psx->mips), 6);
+		return psx_bios_data[(addr&0x1FFFFC)>>2];
+	} else if((addr&0xFFFF0000) == 0x1F800000) {
+		// TODO: I/O
+		printf("R %08X %08X\n", latch, addr);
+		//return 0x00000000;
+		return 0xFFFFFFFF;
+	} else if((addr&0xFFFF0000) == 0x1FA00000) {
+		// EXP1 - TODO memcontrol region
+		return 0xFFFFFFFF;
+	} else {
+		printf("R TRAP %08X %08X\n", latch, addr);
+		psx_mips_fault_set(&(psx->mips), H, state, CAUSE_AdEL);
+		return 0xFFFFFFFF;
 	}
 
-	// TODO: I/O
-
-	// TODO!
-	return 0xFFFFFFFF;
 }
 
 void psx_mips_printf(struct MIPS *mips, struct EmuGlobal *H, struct EmuState *state)
@@ -64,7 +89,18 @@ void psx_mips_printf(struct MIPS *mips, struct EmuGlobal *H, struct EmuState *st
 			if(arg_idx < 4) {
 				arg_loc = &(mips->gpr[4+arg_idx]);
 			} else {
-				arg_loc = &(psx->ram[((mips->gpr[GPR_SP]&0x001FFFFC)>>2)+arg_idx]);
+				//printf("[%08X]", mips->gpr[GPR_SP]);
+				if((mips->gpr[GPR_SP]&0x1FFFFC00) == 0x1F800000) {
+					//printf("[S]");
+					arg_loc = psx->scratch;
+					arg_loc += (mips->gpr[GPR_SP]&0x000003FC)>>2;
+				} else {
+					arg_loc = psx->ram;
+					arg_loc += (mips->gpr[GPR_SP]&0x001FFFFC)>>2;
+
+				}
+				arg_loc += arg_idx;
+				//printf("[%08X][%016p]", mips->gpr[GPR_SP], arg_loc);
 			}
 		}
 		if(*fmt == '%') {
@@ -79,17 +115,24 @@ void psx_mips_printf(struct MIPS *mips, struct EmuGlobal *H, struct EmuState *st
 					break;
 				case 's':
 					printf("%s", ((uint8_t *)psx->ram) + (*arg_loc&0x001FFFFF));
-					arg_loc++;
+					arg_idx++;
 					break;
 				case 'd':
 				case 'i':
 					printf("%d", (int)(int32_t)*arg_loc);
-					arg_loc++;
+					arg_idx++;
+					break;
+				case 'u':
+					printf("%u", (int)(int32_t)*arg_loc);
+					arg_idx++;
 					break;
 				case 'x':
 				case 'X':
 					printf("%08X", *arg_loc);
-					arg_loc++;
+					arg_idx++;
+					break;
+				default:
+					printf("?!?%c", *fmt);
 					break;
 			}
 			fmt++;
