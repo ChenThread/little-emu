@@ -33,7 +33,7 @@ struct GPU
 	uint32_t screen_x0, screen_y0;
 	uint32_t screen_x1, screen_y1;
 	uint32_t screen_div;
-	uint32_t disp_x, disp_y;
+	uint32_t disp_addr;
 
 	uint32_t status;
 } __attribute__((__packed__));

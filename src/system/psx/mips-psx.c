@@ -30,8 +30,22 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 		*v = (*v & ~latch) | (val & latch);
 
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
-		// TODO: I/O
-		printf("W %08X %08X %08X\n", latch, addr, val);
+		// I/O
+		switch(addr) {
+
+			// GPU
+			case 0x1F801810:
+				psx_gpu_write_gp0(&(psx->gpu), H, state, timestamp, val);
+				break;
+			case 0x1F801814:
+				psx_gpu_write_gp1(&(psx->gpu), H, state, timestamp, val);
+				break;
+
+			// Unhandled
+			default:
+				printf("W %08X %08X %08X\n", latch, addr, val);
+				break;
+		}
 	} else if((addr&0xFFFF0000) == 0x1FA00000) {
 		// EXP1 - TODO memcontrol region
 	} else {
@@ -56,10 +70,21 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 		MIPS_ADD_CYCLES(&(psx->mips), 6);
 		return psx_bios_data[(addr&0x1FFFFC)>>2];
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
-		// TODO: I/O
-		printf("R %08X %08X\n", latch, addr);
-		//return 0x00000000;
-		return 0xFFFFFFFF;
+		// I/O
+		switch(addr) {
+
+			// GPU
+			case 0x1F801810:
+				return psx_gpu_read_gp0(&(psx->gpu), H, state, timestamp);
+			case 0x1F801814:
+				return psx_gpu_read_gp1(&(psx->gpu), H, state, timestamp);
+
+			// Unhandled
+			default:
+				printf("R %08X %08X\n", latch, addr);
+				//return 0x00000000;
+				return 0xFFFFFFFF;
+		}
 	} else if((addr&0xFFFF0000) == 0x1FA00000) {
 		// EXP1 - TODO memcontrol region
 		return 0xFFFFFFFF;

@@ -8,8 +8,7 @@ void GPUNAME(init)(struct EmuGlobal *G, struct GPU *gpu)
 	gpu->screen_y0 = 0x010;
 	gpu->screen_x1 = 0x200+2560;
 	gpu->screen_y1 = 0x010+240;
-	gpu->disp_x = 0;
-	gpu->disp_y = 0;
+	gpu->disp_addr = 0;
 	gpu->screen_div = 4;
 }
 
@@ -133,6 +132,7 @@ uint32_t GPUNAME(read_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState
 {
 	GPUNAME(run)(gpu, G, state, timestamp);
 	uint32_t ret = gpu->status;
+	ret |= 0xFFFFFFFF; // TODO!
 	printf("GP1 R -> %08X\n", ret);
 	return ret;
 }
@@ -140,12 +140,43 @@ uint32_t GPUNAME(read_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState
 void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t val)
 {
 	GPUNAME(run)(gpu, G, state, timestamp);
-	printf("GP0 W %08X\n", val);
+
+	switch(val>>24) {
+		default:
+			//printf("GP0 W %08X\n", val);
+			memmove(gpu->cmd_fifo, gpu->cmd_fifo+1, (16-1)*sizeof(uint32_t));
+			gpu->cmd_count--;
+			break;
+	}
 }
 
 void GPUNAME(write_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp, uint32_t val)
 {
 	GPUNAME(run)(gpu, G, state, timestamp);
-	printf("GP1 W %08X\n", val);
+	switch(val>>24) {
+		// case 0x00: // Reset GPU - TODO!
+
+		case 0x01: // Clear FIFO
+			gpu->cmd_count = 0;
+			break;
+
+		case 0x05: // Display source address in halfwords
+			gpu->disp_addr = val&(1024*512-1);
+			break;
+		case 0x06: // Screen X range in vclks
+			gpu->screen_x0 = ((val)&0xFFF);
+			gpu->screen_x1 = ((val>>12)&0xFFF);
+			printf("Xrange: %04X -> %04X\n", gpu->screen_x0, gpu->screen_x1);
+			break;
+		case 0x07: // Screen Y range in scanlines
+			gpu->screen_y0 = ((val)&0x3FF);
+			gpu->screen_y1 = ((val>>10)&0x3FF);
+			printf("Yrange: %04X -> %04X\n", gpu->screen_y0, gpu->screen_y1);
+			break;
+
+		default:
+			//printf("GP1 W %08X\n", val);
+			break;
+	}
 }
 
