@@ -29,11 +29,28 @@ struct GPU
 	uint32_t cmd_fifo[16];
 	uint32_t cmd_count;
 
+	// Transfer stuff
+	enum {
+		PSX_GPU_XFER_NONE = 0,
+		PSX_GPU_XFER_FROM_GPU,
+		PSX_GPU_XFER_TO_GPU,
+	} xfer_mode;
+	uint32_t xfer_addr;
+	uint32_t xfer_width;
+	uint32_t xfer_stride;
+	uint32_t xfer_xrem;
+	uint32_t xfer_yrem;
+
 	// Display rectangle
 	uint32_t screen_x0, screen_y0;
 	uint32_t screen_x1, screen_y1;
 	uint32_t screen_div;
 	uint32_t disp_addr;
+
+	// Drawing rectangle
+	uint32_t draw_x0, draw_y0;
+	uint32_t draw_x1, draw_y1;
+	int32_t draw_ox, draw_oy;
 
 	uint32_t status;
 } __attribute__((__packed__));
