@@ -26,7 +26,7 @@ ${CC} -g -shared -fPIC -o libittle-emu-psx.so \
 	src/core.c \
 	\
 	`sdl2-config --cflags --libs` -lm -Wall && \
-${CC} -g -o lpsx -Isrc src/main.c -L. -Wl,-rpath,. -little-emu-psx \
+${CC} -g -o lpsx -Isrc -DTARGET_PSX=1 src/main.c -L. -Wl,-rpath,. -little-emu-psx \
 	`sdl2-config --cflags --libs` -lm -Wall && \
 ${CC} -g -o lmd -Isrc src/main.c -L. -Wl,-rpath,. -little-emu-md \
 	`sdl2-config --cflags --libs` -lm -Wall && \

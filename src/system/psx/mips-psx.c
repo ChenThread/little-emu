@@ -11,6 +11,46 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause);
 
 extern const uint32_t psx_bios_data[512<<8];
 
+// TODO emulate this as a separate device
+static void pad_update(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t val)
+{
+	struct PSX *psx = (struct PSX *)state;
+	val &= 0xFF;
+
+	psx->joy[0].val <<= 8;
+	psx->joy[0].val &= ~0xFF;
+	uint32_t rval = 0xFF;
+	switch(psx->joy[0].mode) {
+		case PSX_JOY_MODE_UNENGAGED:
+			break;
+		case PSX_JOY_MODE_WAITING:
+			if(val == 0x01) {
+				psx->joy[0].mode = PSX_JOY_MODE_PAD_CMD;
+			} else {
+				psx->joy[0].mode = PSX_JOY_MODE_UNENGAGED;
+			}
+			break;
+		case PSX_JOY_MODE_PAD_CMD:
+			rval = 0x41;
+			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_0;
+			break;
+		case PSX_JOY_MODE_BUTTON_0:
+			rval = 0x5A;
+			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_1;
+			break;
+		case PSX_JOY_MODE_BUTTON_1:
+			rval = (uint8_t)(psx->joy[0].buttons);
+			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_2;
+			break;
+		case PSX_JOY_MODE_BUTTON_2:
+			rval = (uint8_t)(psx->joy[0].buttons>>8);
+			psx->joy[0].mode = PSX_JOY_MODE_UNENGAGED;
+			break;
+	}
+
+	psx->joy[0].val |= (rval & 0xFF);
+}
+
 void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t latch, uint32_t val)
 {
 	struct PSX *psx = (struct PSX *)state;
@@ -32,6 +72,29 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
 		// I/O
 		switch(addr) {
+
+			// Pad
+			case 0x1F801040: // Pad TX
+				//printf("Pad TX %08X\n", val);
+				pad_update(H, state, timestamp, val);
+				break;
+			case 0x1F801048: // Pad Mode
+			case 0x1F80104A: // Pad Ctrl
+				//printf("Pad Mode/Ctrl %08X %08X\n", val, latch);
+				if((val & 0x30000000) == 0x10000000) {
+					if(psx->joy[0].mode == PSX_JOY_MODE_UNENGAGED) {
+						psx->joy[0].mode = PSX_JOY_MODE_WAITING;
+					}
+				} else {
+					psx->joy[0].mode = PSX_JOY_MODE_UNENGAGED;
+				}
+				psx->joy[0].pad_ctrl_mode &= ~latch;
+				psx->joy[0].pad_ctrl_mode |= val & latch;
+				break;
+			case 0x1F80104C: // ----
+			case 0x1F80104E: // Pad Baud
+				printf("Pad Baud %08X %08X\n", val, latch);
+				break;
 
 			// GPU
 			case 0x1F801810:
@@ -72,6 +135,23 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
 		// I/O
 		switch(addr) {
+
+			// Pad
+			case 0x1F801040: { // Pad RX
+				uint32_t ret = psx->joy[0].val;
+				psx->joy[0].val >>= 8;
+				psx->joy[0].val |= 0xFF000000;
+				//printf("Pad RX %02X\n", ret);
+				return ret;
+			} break;
+			case 0x1F801044: // Pad Status
+				return 0x00000087;
+			case 0x1F801048: // Pad Mode
+			case 0x1F80104A: // Pad Ctrl
+				return psx->joy[0].pad_ctrl_mode;
+			case 0x1F80104C: // ----
+			case 0x1F80104E: // Pad Baud
+				return 0x00880000;
 
 			// GPU
 			case 0x1F801810:

@@ -24,8 +24,23 @@ void (*botlib_update)(struct EmuGlobal *G) = NULL;
 void (*botlib_hook_input)(struct EmuGlobal *G, void *state, uint64_t timestamp) = NULL;
 
 #ifndef DEDI
+#ifndef TARGET_PSX
+#define TARGET_PSX 0
+#endif
+
 // TODO: unhardcode
-static SDL_Keycode keymap[] = {SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_KP_2, SDLK_KP_3};
+#if TARGET_PSX
+static SDL_Keycode keymap[] = {
+	SDLK_BACKSLASH, SDLK_LALT, SDLK_RALT, SDLK_RETURN,
+	SDLK_w, SDLK_d, SDLK_s, SDLK_a,
+	SDLK_LSHIFT, SDLK_RSHIFT, SDLK_LCTRL, SDLK_RCTRL,
+	SDLK_i, SDLK_l, SDLK_k, SDLK_j,
+};
+#else
+static SDL_Keycode keymap[] = {
+	SDLK_w, SDLK_s, SDLK_a, SDLK_d, SDLK_KP_2, SDLK_KP_3
+};
+#endif
 
 SDL_Window *window = NULL;
 SDL_Renderer *renderer = NULL;

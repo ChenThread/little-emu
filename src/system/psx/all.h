@@ -25,11 +25,22 @@
 //include "audio/psx/all.h"
 #include "cpu/psx/all.h"
 
+enum {
+	PSX_JOY_MODE_UNENGAGED = 0,
+	PSX_JOY_MODE_WAITING,
+	PSX_JOY_MODE_PAD_CMD,  // 0x01 0x--
+	PSX_JOY_MODE_BUTTON_0, // 0x42 0x5A
+	PSX_JOY_MODE_BUTTON_1, // 0x-- 0x41
+	PSX_JOY_MODE_BUTTON_2, // 0x-- 0xLL
+	PSX_JOY_MODE_BUTTON_3, // 0x-- 0xHH
+};
+
 struct PSXJoy
 {
-	uint8_t mode;
-	uint8_t typ;
+	uint32_t val;
+	uint32_t pad_ctrl_mode;
 	uint16_t buttons;
+	uint8_t mode;
 	// TODO: inputs which aren't the digital gamepad
 	// (this requires a lot of tracking)
 } __attribute__((__packed__));
