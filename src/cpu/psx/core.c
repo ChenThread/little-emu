@@ -17,8 +17,9 @@ void MIPSNAME(reset)(struct MIPS *mips)
 	mips->pc_diff1 = 4;
 	mips->halted = 0;
 	mips->lsreg = -1;
-	mips->lsaddr = 0;
-	mips->lsop = 0;
+	mips->lslatch = 0xFFFFFFFF;
+	mips->new_lsreg = -1;
+	mips->was_branch = 0;
 
 	//MIPS_ADD_CYCLES(mips, 1);
 }
@@ -33,14 +34,24 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 	}
 
 	mips->lsreg = -1;
-	mips->lsop = 0;
+
+	if(cause == CAUSE_AdEL || cause == CAUSE_AdES) {
+		mips->new_lsreg = -1;
+	}
 
 	// TODO fill cause in properly
+	if(cause == CAUSE_Bp) {
+		//printf("BREAK %08X %08X %02X\n", mips->op_pc, mips->op, mips->was_branch);
+		//cause = CAUSE_Sys;
+	}
+	if(mips->was_branch != 0) {
+		//printf("BRANCH %08X %08X %02X\n", mips->op_pc, mips->op, mips->was_branch);
+	}
+
 	mips->cop0reg[0x0D] &= ~0x8000007C;
 	mips->cop0reg[0x0D] |= ((cause&0x1F)<<2);
 
-	// FIXME this is actually cheating - need to do the branch delay check properly!
-	if(mips->pc_diff1 != 4) {
+	if((mips->was_branch & 1) != 0) {
 		mips->cop0reg[0x0D] |= 0x80000000;
 		mips->cop0reg[0x0E] = mips->op_pc - 4;
 	} else {
@@ -81,25 +92,30 @@ static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS
 	return v;
 }
 
-static uint32_t MIPSNAME(mem_read32_l)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t oldval)
+static uint32_t MIPSNAME(mem_read32_l)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, int rt)
 {
 	uint32_t mask = (0xFFFFFFFF<<(((~addr)&3)<<3));
+	uint32_t oldval = (rt == mips->lsreg ? mips->lsval : mips->gpr[rt]);
 	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr&~3);
 	v <<= ((~addr)&3)<<3;
+	//mips->lslatch = mask;
 	return (v&mask)|(oldval&~mask);
 }
 
-static uint32_t MIPSNAME(mem_read32_r)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t oldval)
+static uint32_t MIPSNAME(mem_read32_r)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, int rt)
 {
 	uint32_t mask = (0xFFFFFFFF>>((addr&3)<<3));
+	uint32_t oldval = (rt == mips->lsreg ? mips->lsval : mips->gpr[rt]);
 	uint32_t v = MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, addr&~3);
 	v >>= (addr&3)<<3;
+	//mips->lslatch = mask;
 	return (v&mask)|(oldval&~mask);
 }
 
 static uint32_t MIPSNAME(mem_read32)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
 {
 	if((addr & 0x3) != 0) {
+		mips->cop0reg[0x08] = addr;
 		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
 		return 0xFFFFFFFF;
 	}
@@ -111,6 +127,7 @@ static uint32_t MIPSNAME(mem_read32)(struct MIPS *mips, MIPS_STATE_PARAMS, uint3
 static uint32_t MIPSNAME(mem_read16)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
 {
 	if((addr & 0x1) != 0) {
+		mips->cop0reg[0x08] = addr;
 		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
 		return 0xFFFFFFFF;
 	}
@@ -161,6 +178,7 @@ static void MIPSNAME(mem_write32_r)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32
 static void MIPSNAME(mem_write32)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t val)
 {
 	if((addr & 0x3) != 0) {
+		mips->cop0reg[0x08] = addr;
 		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdES);
 		return;
 	}
@@ -172,6 +190,7 @@ static void MIPSNAME(mem_write32)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t
 static void MIPSNAME(mem_write16)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t val)
 {
 	if((addr & 0x1) != 0) {
+		mips->cop0reg[0x08] = addr;
 		psx_mips_fault_set(mips, MIPS_STATE_ARGS, CAUSE_AdES);
 		return;
 	}
@@ -275,6 +294,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 
 		// Clear r0
 		mips->gpr[GPR_ZERO] = 0;
+		mips->last_reg_write = -2;
 
 		//printf("%08X %08X %08X\n", mips->op_pc, mips->op, mips->gpr[GPR_SP]);
 	
@@ -289,31 +309,49 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		if(otyp == 0) switch(ofunc) {
 			case 0x00: // SLL
 				mips->gpr[rd] = mips->gpr[rt] << sa;
+				mips->last_reg_write = rd;
 				break;
 			case 0x02: // SRL
 				mips->gpr[rd] = ((uint32_t)mips->gpr[rt]) >> sa;
+				mips->last_reg_write = rd;
 				break;
 			case 0x03: // SRA
 				mips->gpr[rd] = (uint32_t)(((int32_t)mips->gpr[rt]) >> sa);
+				mips->last_reg_write = rd;
 				break;
 			case 0x04: // SLLV
 				mips->gpr[rd] = mips->gpr[rt] << mips->gpr[rs];
+				mips->last_reg_write = rd;
 				break;
 			case 0x06: // SRLV
 				mips->gpr[rd] = ((uint32_t)mips->gpr[rt]) >> (uint32_t)mips->gpr[rs];
+				mips->last_reg_write = rd;
 				break;
 			case 0x07: // SRAV
 				mips->gpr[rd] = (uint32_t)(((int32_t)mips->gpr[rt]) >> mips->gpr[rs]);
+				mips->last_reg_write = rd;
 				break;
 
 			case 0x09: // JALR
-				mips->gpr[rd] = mips->op_pc + 8;
+				if((mips->gpr[rs] & 3) == 0) {
+					mips->gpr[rd] = mips->op_pc + 8;
+					mips->last_reg_write = rd;
+				}
 				// FALL THROUGH
 			case 0x08: // JR
-				mips->pc_diff1 = mips->gpr[rs];
-				//printf("jr   %08X %08X %02X %d\n", mips->pc_diff1, mips->gpr[31], ofunc, rd);
-				mips->pc_diff1 -= mips->pc;
-				//xcomms |= 0x10;
+				if((mips->gpr[rs] & 3) != 0) {
+					//printf("JR TO FAULT: %08X\n", mips->gpr[rs]);
+					mips->cop0reg[0x08] = mips->gpr[rs];
+					mips->op_pc = mips->gpr[rs];
+					MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
+				} else {
+					mips->pc_diff1 = mips->gpr[rs];
+					if(ofunc != 9 && mips->gpr[rs] != 0x8001EE30) {
+						//printf("jr   %08X %08X %08X %02X %d\n", mips->op_pc, mips->pc_diff1, mips->gpr[31], ofunc, rd);
+					}
+					mips->pc_diff1 -= mips->pc;
+					mips->was_branch |= 0x02;
+				}
 				break;
 
 			case 0x0C: // SYSCALL
@@ -324,16 +362,18 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 
 			case 0x10: // MFHI
-				//printf("MFHI %08X\n", mips->op_pc);
+				//printf("MFHI %2d %08X %08X\n", rd, mips->op_pc, mips->rhi);
 				mips->gpr[rd] = mips->rhi;
+				mips->last_reg_write = rd;
 				break;
 			case 0x11: // MTHI
-				//printf("MTHI %08X\n", mips->op_pc);
+				//printf("MTHI %2d %08X %08X\n", rs, mips->op_pc, mips->gpr[rs]);
 				mips->rhi = mips->gpr[rs];
 				break;
 			case 0x12: // MFLO
 				//printf("MFLO %08X\n", mips->op_pc);
 				mips->gpr[rd] = mips->rlo;
+				mips->last_reg_write = rd;
 				break;
 			case 0x13: // MTLO
 				//printf("MTLO %08X\n", mips->op_pc);
@@ -343,25 +383,31 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 			// Because we actually have 64-bit ints in C,
 			// as opposed to only having 32-bit ints in GLSL 4.30,
 			// this part is a bit nicer.
-			case 0x18: // MUL
+			case 0x18: // MULT
 				{
 					int64_t va = (int64_t)(int32_t)mips->gpr[rs];
 					int64_t vb = (int64_t)(int32_t)mips->gpr[rt];
-					int64_t cmbres = (va*vb);
+					int64_t cmbresi = (va*vb);
+					uint64_t cmbres = (uint64_t)cmbresi;
 
 					mips->rlo = (uint32_t)(uint64_t)(cmbres);
 					mips->rhi = (uint32_t)(uint64_t)(cmbres>>32ULL);
 #if 0
-				printf("%08X %08X %08X %08X %08X\n"
+				printf("%2d %2d %08X %08X %016llX %08X %08X %08X\n"
+					, rs
+					, rt
 					, mips->gpr[rs]
 					, mips->gpr[rt]
-					, mips->rlo
+					, (unsigned long long)cmbres
 					, mips->rhi
+					, mips->rlo
 					, mips->op_pc
 				);
 #endif
 				}
-			case 0x19: // MULU
+				break;
+
+			case 0x19: // MULTU
 				{
 					uint64_t va = (uint64_t)(uint32_t)mips->gpr[rs];
 					uint64_t vb = (uint64_t)(uint32_t)mips->gpr[rt];
@@ -413,10 +459,12 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
 					} else {
 						mips->gpr[rd] = vr;
+						mips->last_reg_write = rd;
 					}
 				} break;
 			case 0x21: // ADDU
 				mips->gpr[rd] = mips->gpr[rs] + mips->gpr[rt];
+				mips->last_reg_write = rd;
 				break;
 			case 0x22: // SUB
 				{
@@ -427,30 +475,38 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
 					} else {
 						mips->gpr[rd] = vr;
+						mips->last_reg_write = rd;
 					}
 				} break;
 			case 0x23: // SUBU
 				mips->gpr[rd] = mips->gpr[rs] - mips->gpr[rt];
+				mips->last_reg_write = rd;
 				break;
 
 			case 0x24: // AND
 				mips->gpr[rd] = mips->gpr[rs] & mips->gpr[rt];
+				mips->last_reg_write = rd;
 				break;
 			case 0x25: // OR
 				mips->gpr[rd] = mips->gpr[rs] | mips->gpr[rt];
+				mips->last_reg_write = rd;
 				break;
 			case 0x26: // XOR
 				mips->gpr[rd] = mips->gpr[rs] ^ mips->gpr[rt];
+				mips->last_reg_write = rd;
 				break;
 			case 0x27: // NOR
 				mips->gpr[rd] = ~(mips->gpr[rs] | mips->gpr[rt]);
+				mips->last_reg_write = rd;
 				break;
 
 			case 0x2A: // SLT
 				mips->gpr[rd] = ((int32_t)mips->gpr[rs] < (int32_t)mips->gpr[rt] ? 1 : 0);
+				mips->last_reg_write = rd;
 				break;
 			case 0x2B: // SLTU
 				mips->gpr[rd] = ((uint32_t)(mips->gpr[rs]) < (uint32_t)(mips->gpr[rt]) ? 1 : 0);
+				mips->last_reg_write = rd;
 				break;
 
 			default:
@@ -463,7 +519,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x01: // BGEZ
@@ -471,7 +527,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x10: // BLTZAL
@@ -480,7 +536,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x11: // BGEZAL
@@ -489,7 +545,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 
@@ -502,36 +558,44 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 			case 0x00: // MFC
 				switch(rd) {
 					case 0x03: // BPC
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x06: // JumpDest
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x07: // DCIC
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x08: // BadVAddr
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x0C: // SR
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x0D: // CAUSE
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						//printf("CAUSE: %08X %d\n", mips->cop0reg[rd], rt);
 						break;
 
 					case 0x0E: // EPC
-						mips->gpr[rt] = mips->cop0reg[rd];
+						mips->new_lsreg = rt;
+						mips->new_lsval = mips->cop0reg[rd];
 						break;
 
 					case 0x0F: // PRId
-						mips->gpr[rt] = 0x00000002;
+						mips->new_lsreg = rt;
+						mips->new_lsval = 0x00000002;
 						break;
 
 					default:
@@ -555,7 +619,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						mips->cop0reg[rd] = mips->gpr[rt];
 						break;
 
-					case 0x06: // JUMPDEST
+					case 0x06: // JumpDest
 						// TODO!
 						mips->cop0reg[rd] = mips->gpr[rt];
 						break;
@@ -621,7 +685,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				mips->pc_diff1 = (mips->op_pc&0xF0000000)|((mips->op&0x3FFFFFF)<<2);
 				//printf("jump %08X %08X\n", mips->pc_diff1, mips->gpr[31]);
 				mips->pc_diff1 -= mips->pc;
-				//xcomms |= 0x10;
+				mips->was_branch |= 0x02;
 				break;
 
 			case 0x04: // BEQ
@@ -629,7 +693,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x05: // BNE
@@ -637,7 +701,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x06: // BLEZ
@@ -645,7 +709,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 			case 0x07: // BGTZ
@@ -653,7 +717,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
-					//xcomms |= 0x10;
+					mips->was_branch |= 0x02;
 				}
 				break;
 
@@ -666,80 +730,103 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Ov);
 					} else {
 						mips->gpr[rt] = vr;
+						mips->last_reg_write = rt;
 					}
 				} break;
 
 			case 0x09: // ADDIU
 				mips->gpr[rt] = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
+				mips->last_reg_write = rt;
 				break;
 			case 0x0A: // SLTI
 				mips->gpr[rt] = ((int32_t)mips->gpr[rs] < (int32_t)(int16_t)(int32_t)mips->op ? 1 : 0);
+				mips->last_reg_write = rt;
 				break;
 			case 0x0B: // SLTIU
 				mips->gpr[rt] = (((uint32_t)(mips->gpr[rs]) < (uint32_t)((int32_t)(int16_t)mips->op)) ? 1 : 0);
+				mips->last_reg_write = rt;
 				break;
 
 			case 0x0C: // ANDI
 				mips->gpr[rt] = mips->gpr[rs] & (mips->op&0xFFFF);
+				mips->last_reg_write = rt;
 				break;
 			case 0x0D: // ORI
 				mips->gpr[rt] = mips->gpr[rs] | (mips->op&0xFFFF);
+				mips->last_reg_write = rt;
 				break;
 			case 0x0E: // XORI
 				mips->gpr[rt] = mips->gpr[rs] ^ (mips->op&0xFFFF);
+				mips->last_reg_write = rt;
 				break;
 			case 0x0F: // LUI
 				mips->gpr[rt] = (mips->op&0xFFFF)<<16;
+				mips->last_reg_write = rt;
 				break;
 
 			case 0x20: // LB
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = (int8_t)MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op);
 				break;
 			case 0x21: // LH
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = (int16_t)MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op);
+				//printf("LH %08X %2d %08X\n", mips->op_pc, rt, mips->new_lsval);
 				break;
 			case 0x22: // LWL
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = MIPSNAME(mem_read32_l)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					rt);
 				break;
 			case 0x23: // LW
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = MIPSNAME(mem_read32)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op);
 				break;
 			case 0x24: // LBU
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = (uint8_t)MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op);
 				break;
 			case 0x25: // LHU
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = (uint16_t)MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op);
 				break;
 			case 0x26: // LWR
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = rt;
+				mips->new_lsreg = rt;
+				mips->new_lsval = MIPSNAME(mem_read32_r)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					rt);
 				break;
 
 			case 0x28: // SB
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = -2-rt;
+				MIPSNAME(mem_write8)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					mips->gpr[rt]);
 				break;
 			case 0x29: // SH
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = -2-rt;
+				MIPSNAME(mem_write16)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					mips->gpr[rt]);
 				break;
 			case 0x2A: // SWL
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = -2-rt;
+				MIPSNAME(mem_write32_l)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					mips->gpr[rt]);
 				break;
 			case 0x2B: // SW
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = -2-rt;
+				MIPSNAME(mem_write32)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					mips->gpr[rt]);
 				break;
 			case 0x2E: // SWR
-				mips->lsaddr = mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op;
-				mips->lsreg = -2-rt;
+				MIPSNAME(mem_write32_r)(mips, MIPS_STATE_ARGS,
+					mips->gpr[rs] + (uint32_t)(int32_t)(int16_t)mips->op,
+					mips->gpr[rt]);
 				break;
 
 			default:
@@ -748,79 +835,33 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 		}
 
-		if(mips->lsreg != -1) {
-			mips->lsop = otyp;
-		}
-
-		// Check if storing
-		if(mips->lsreg <= -2) {
-			// Store
-			mips->lsreg = -2-mips->lsreg;
-			if((mips->cop0reg[0x0C] & 0x10000) == 0) {
-				// TODO: handle the isolated cache variant properly
-				int v = mips->gpr[mips->lsreg];
-				switch(mips->lsop) {
-					case 0x28: // SB
-						MIPSNAME(mem_write8)(mips, MIPS_STATE_ARGS, mips->lsaddr, v);
-						break;
-					case 0x29: // SH
-						MIPSNAME(mem_write16)(mips, MIPS_STATE_ARGS, mips->lsaddr, v);
-						break;
-					case 0x2A: // SWL
-						MIPSNAME(mem_write32_l)(mips, MIPS_STATE_ARGS, mips->lsaddr, v);
-						break;
-					case 0x2B: // SW
-						MIPSNAME(mem_write32)(mips, MIPS_STATE_ARGS, mips->lsaddr, v);
-						break;
-					case 0x2E: // SWR
-						MIPSNAME(mem_write32_r)(mips, MIPS_STATE_ARGS, mips->lsaddr, v);
-						break;
-				}
-			}
-			mips->lsreg = -1;
-			continue;
-		}
-
 		// Fetch op or thing to load
-		if(mips->lsreg >= 0) {
-			// Load
-			mips->fault_fired = false;
-			int v = 0;
-			if((mips->cop0reg[0x0C] & 0x10000) == 0) {
-				// TODO: handle the isolated cache variant properly
-				switch(mips->lsop) {
-					case 0x20: // LB
-						v = MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS, mips->lsaddr);
-						break;
-					case 0x21: // LH
-						//printf("LH %08X %08X\n", mips->op_pc, mips->lsaddr);
-						v = MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS, mips->lsaddr);
-						break;
-					case 0x22: // LWL
-						v = MIPSNAME(mem_read32_l)(mips, MIPS_STATE_ARGS, mips->lsaddr, mips->gpr[mips->lsreg]);
-						break;
-					case 0x23: // LW
-						v = MIPSNAME(mem_read32)(mips, MIPS_STATE_ARGS, mips->lsaddr);
-						break;
-					case 0x24: // LBU
-						v = MIPSNAME(mem_read8)(mips, MIPS_STATE_ARGS, mips->lsaddr);
-						v = (uint32_t)(uint8_t)v;
-						break;
-					case 0x25: // LHU
-						v = MIPSNAME(mem_read16)(mips, MIPS_STATE_ARGS, mips->lsaddr);
-						v = (uint32_t)(uint16_t)v;
-						break;
-					case 0x26: // LWR
-						v = MIPSNAME(mem_read32_r)(mips, MIPS_STATE_ARGS, mips->lsaddr, mips->gpr[mips->lsreg]);
-						break;
-				}
-			}
-			if(!mips->fault_fired) {
-				mips->gpr[mips->lsreg] = v;
-			}
+		if(mips->lsreg == mips->new_lsreg) {
 			mips->lsreg = -1;
-			continue;
 		}
+
+		if(mips->lsreg == mips->last_reg_write) {
+			//printf("LR cancel\n");
+			mips->lsreg = -1;
+		}
+		if(mips->lsreg >= 0) {
+			assert(mips->lsreg > 0 && mips->lsreg < 32);
+			mips->gpr[mips->lsreg] &= ~mips->lslatch;
+			mips->gpr[mips->lsreg] |= mips->lsval & mips->lslatch;
+		}
+		mips->lsreg = -1;
+		mips->lslatch = 0xFFFFFFFF;
+		if(mips->new_lsreg == 0) {
+			mips->new_lsreg = -1;
+		}
+
+		// Advance load stuff
+		mips->lsreg = mips->new_lsreg;
+		mips->lsval = mips->new_lsval;
+		mips->new_lsreg = -1;
+
+		// Skip branch delay slot
+		mips->was_branch >>= 1;
 
 	}
 }

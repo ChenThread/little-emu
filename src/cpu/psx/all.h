@@ -53,12 +53,16 @@ struct MIPS
 	uint32_t rhi, rlo;
 	uint32_t pc;
 	uint32_t pc_diff1;
-	uint32_t lsaddr, lsop;
-	int32_t lsreg;
+
+	uint32_t new_lsval, lsval;
+	int32_t new_lsreg, lsreg;
+	uint32_t new_lslatch, lslatch;
+	int32_t last_reg_write;
 
 	uint32_t op_pc;
 	uint32_t op;
 
+	uint8_t was_branch;
 	uint8_t halted;
 	uint8_t fault_fired;
 } __attribute__((__packed__));

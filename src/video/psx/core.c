@@ -138,7 +138,34 @@ void GPUNAME(run)(struct GPU *gpu, struct EmuGlobal *H, struct EmuState *state, 
 uint32_t GPUNAME(read_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	GPUNAME(run)(gpu, G, state, timestamp);
-	uint32_t ret = 0;
+
+	switch(gpu->xfer_mode) {
+		case PSX_GPU_XFER_NONE:
+		case PSX_GPU_XFER_TO_GPU:
+			break;
+
+		case PSX_GPU_XFER_FROM_GPU: {
+			uint32_t val = gpu->vram.w[(gpu->xfer_addr & (1024*512-1))>>1];
+			gpu->xfer_addr += 2;
+			gpu->xfer_xrem -= 2;
+			if(gpu->xfer_xrem == 0) {
+				gpu->xfer_addr += gpu->xfer_stride;
+				gpu->xfer_xrem = gpu->xfer_width;
+				gpu->xfer_yrem -= 1;
+				if(gpu->xfer_yrem == 0) {
+					gpu->xfer_mode = PSX_GPU_XFER_NONE;
+				}
+			}
+
+			return val;
+		} break;
+
+		default:
+			assert(!"UNREACHABLE");
+			break;
+	}
+
+	uint32_t ret = 0xFFFFFFFF;
 	printf("GP0 R -> %08X\n", ret);
 	return ret;
 }
@@ -148,7 +175,7 @@ uint32_t GPUNAME(read_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState
 	GPUNAME(run)(gpu, G, state, timestamp);
 	uint32_t ret = gpu->status;
 	ret |= 0xFFFFFFFF; // TODO!
-	printf("GP1 R -> %08X\n", ret);
+	//printf("GP1 R -> %08X\n", ret);
 	return ret;
 }
 
@@ -167,11 +194,23 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 			break;
 
 		case PSX_GPU_XFER_FROM_GPU:
-			assert(!"TODO!");
+			printf("!!! GPU Write in READ mode %08X\n", val);
+			gpu->xfer_addr += 2;
+			gpu->xfer_xrem -= 2;
+			if(gpu->xfer_xrem == 0) {
+				gpu->xfer_addr += gpu->xfer_stride;
+				gpu->xfer_xrem = gpu->xfer_width;
+				gpu->xfer_yrem -= 1;
+				if(gpu->xfer_yrem == 0) {
+					gpu->xfer_mode = PSX_GPU_XFER_NONE;
+				}
+			}
+			return;
+			//assert(!"TODO!");
 			break;
 
 		case PSX_GPU_XFER_TO_GPU:
-			gpu->vram.w[gpu->xfer_addr>>1] = val;
+			gpu->vram.w[(gpu->xfer_addr & (1024*512-1))>>1] = val;
 			gpu->xfer_addr += 2;
 			gpu->xfer_xrem -= 2;
 			if(gpu->xfer_xrem == 0) {
@@ -278,16 +317,32 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 		//
 		// TRANSFERS
 		//
-		case 0xA0: { // Upload rect
+		case 0xA0: // Upload rect
+		case 0xC0: // Download rect
+		{
 			if(gpu->cmd_count < 3) { return; }
-			printf("GP0 - Upload rect %08X %08X\n", c[1], c[2]);
-			gpu->xfer_mode = PSX_GPU_XFER_TO_GPU;
+			switch(cmd) {
+				case 0xA0:
+					printf("GP0 - Upload rect %08X %08X\n", c[1], c[2]);
+					gpu->xfer_mode = PSX_GPU_XFER_TO_GPU;
+					break;
+				case 0xC0:
+					printf("GP0 - Download rect %08X %08X\n", c[1], c[2]);
+					gpu->xfer_mode = PSX_GPU_XFER_FROM_GPU;
+					break;
+
+				default:
+					assert(!"UNREACHABLE");
+					break;
+			}
 			uint32_t mx = (uint32_t)(uint16_t)(c[1]);
 			uint32_t my = (uint32_t)(uint16_t)(c[1]>>16);
 			uint32_t mw = (uint32_t)(uint16_t)(c[2]);
 			uint32_t mh = (uint32_t)(uint16_t)(c[2]>>16);
 
 			// TODO: properly handle odd X/W values!
+			mx &= 1;
+			mw = (mw+1)&~1;
 			assert((mx&1) == 0);
 			assert((mw&1) == 0);
 
@@ -308,12 +363,6 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 			GPU_DROP_N_COMMANDS(3);
 		} break;
 
-		case 0xC0: { // Download rect
-			// TODO!
-			if(gpu->cmd_count < 3) { return; }
-			printf("GP0 - Download rect %08X %08X\n", c[1], c[2]);
-			GPU_DROP_N_COMMANDS(3);
-		} break;
 		default:
 			printf("GP0 W %08X\n", val);
 			GPU_DROP_N_COMMANDS(1);
@@ -329,6 +378,12 @@ void GPUNAME(write_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 
 		case 0x01: // Clear FIFO
 			gpu->cmd_count = 0;
+			break;
+
+		case 0x04: // DMA mode
+			// TODO: actually set DMA mode properly
+			// (instead of just cancelling a transfer)
+			gpu->xfer_mode = PSX_GPU_XFER_NONE;
 			break;
 
 		case 0x05: // Display source address in halfwords
