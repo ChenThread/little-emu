@@ -24,6 +24,8 @@ void MIPSNAME(reset)(struct MIPS *mips)
 	//MIPS_ADD_CYCLES(mips, 1);
 }
 
+static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr);
+
 void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 {
 	//printf("FAULT %02X %08X\n", cause, mips->op_pc);
@@ -41,8 +43,22 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 
 	// TODO fill cause in properly
 	if(cause == CAUSE_Bp) {
-		//printf("BREAK %08X %08X %02X\n", mips->op_pc, mips->op, mips->was_branch);
-		//cause = CAUSE_Sys;
+#if 0
+		printf("    = %08X %08X\n", mips->op_pc-8,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc-8));
+		printf("    - %08X %08X\n", mips->op_pc-4,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc-4));
+		printf("BREAK %08X %08X %02X\n", mips->op_pc, mips->op, mips->was_branch);
+		printf("    - %08X %08X\n", mips->op_pc+4,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+4));
+		printf("    - %08X %08X\n", mips->op_pc+8,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+8));
+		printf("    - %08X %08X\n", mips->op_pc+12,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+12));
+		printf("    - %08X %08X\n", mips->op_pc+16,
+			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+16));
+		cause = CAUSE_Sys;
+#endif
 	}
 	if(mips->was_branch != 0) {
 		//printf("BRANCH %08X %08X %02X\n", mips->op_pc, mips->op, mips->was_branch);
@@ -332,25 +348,27 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				mips->last_reg_write = rd;
 				break;
 
-			case 0x09: // JALR
-				if((mips->gpr[rs] & 3) == 0) {
-					mips->gpr[rd] = mips->op_pc + 8;
-					mips->last_reg_write = rd;
-				}
-				// FALL THROUGH
 			case 0x08: // JR
+			case 0x09: // JALR
 				if((mips->gpr[rs] & 3) != 0) {
 					//printf("JR TO FAULT: %08X\n", mips->gpr[rs]);
 					mips->cop0reg[0x08] = mips->gpr[rs];
 					mips->op_pc = mips->gpr[rs];
+					if(ofunc == 0x09) {
+						// JALR
+						mips->gpr[rd] = mips->op_pc + 8;
+						mips->last_reg_write = rd;
+					}
 					MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_AdEL);
 				} else {
 					mips->pc_diff1 = mips->gpr[rs];
-					if(ofunc != 9 && mips->gpr[rs] != 0x8001EE30) {
-						//printf("jr   %08X %08X %08X %02X %d\n", mips->op_pc, mips->pc_diff1, mips->gpr[31], ofunc, rd);
-					}
 					mips->pc_diff1 -= mips->pc;
 					mips->was_branch |= 0x02;
+					if(ofunc == 0x09) {
+						// JALR
+						mips->gpr[rd] = mips->op_pc + 8;
+						mips->last_reg_write = rd;
+					}
 				}
 				break;
 
@@ -532,20 +550,24 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				break;
 			case 0x10: // BLTZAL
 				if((int32_t)mips->gpr[rs] < 0) {
-					mips->gpr[31] = mips->op_pc + 8;
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
 					mips->was_branch |= 0x02;
 				}
+				if((rt&~0x11) == 0) {
+					mips->gpr[31] = mips->op_pc + 8;
+				}
 				break;
 			case 0x11: // BGEZAL
-				if((int32_t)mips->gpr[rs] >= 0) {
-					mips->gpr[31] = mips->op_pc + 8;
+				if(((int32_t)(mips->gpr[rs])) >= 0) {
 					mips->pc_diff1 = ((int32_t)(int16_t)mips->op)<<2;
 					mips->pc_diff1 += mips->op_pc + 4;
 					mips->pc_diff1 -= mips->pc;
 					mips->was_branch |= 0x02;
+				}
+				if((rt&~0x11) == 0) {
+					mips->gpr[31] = mips->op_pc + 8;
 				}
 				break;
 
@@ -556,6 +578,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 
 		} else if(otyp == 0x10) switch(rs) {
 			case 0x00: // MFC
+				//printf("MFC0, R %02X %08X\n", rd, mips->cop0reg[rd]);
 				switch(rd) {
 					case 0x03: // BPC
 						mips->new_lsreg = rt;
@@ -563,6 +586,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 						break;
 
 					case 0x06: // JumpDest
+						//printf("JUMPDEST, R %08X\n", mips->cop0reg[rd]);
 						mips->new_lsreg = rt;
 						mips->new_lsval = mips->cop0reg[rd];
 						break;
@@ -580,6 +604,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 					case 0x0C: // SR
 						mips->new_lsreg = rt;
 						mips->new_lsval = mips->cop0reg[rd];
+						//printf("SR: %08X %d\n", mips->cop0reg[rd], rt);
 						break;
 
 					case 0x0D: // CAUSE
@@ -621,7 +646,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 
 					case 0x06: // JumpDest
 						// TODO!
-						mips->cop0reg[rd] = mips->gpr[rt];
+						//mips->cop0reg[rd] = mips->gpr[rt];
 						break;
 
 					case 0x07: // DCIC
@@ -684,6 +709,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 			case 0x02: // J
 				mips->pc_diff1 = (mips->op_pc&0xF0000000)|((mips->op&0x3FFFFFF)<<2);
 				//printf("jump %08X %08X\n", mips->pc_diff1, mips->gpr[31]);
+				//mips->cop0reg[0x06] = mips->pc_diff1;
 				mips->pc_diff1 -= mips->pc;
 				mips->was_branch |= 0x02;
 				break;
