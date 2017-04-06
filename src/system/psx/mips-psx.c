@@ -96,6 +96,24 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 				printf("Pad Baud %08X %08X\n", val, latch);
 				break;
 
+			// Interrupts
+			case 0x1F801070: // I_STAT
+				psx->i_stat &= val & latch;
+				if((psx->i_mask & psx->i_stat) != 0) {
+					psx->mips.cop0reg[0x0D] |= 0x0400;
+				} else {
+					psx->mips.cop0reg[0x0D] &= ~0x0400;
+				}
+				break;
+			case 0x1F801074: // I_MASK
+				psx->i_mask = val & latch;
+				if((psx->i_mask & psx->i_stat) != 0) {
+					psx->mips.cop0reg[0x0D] |= 0x0400;
+				} else {
+					psx->mips.cop0reg[0x0D] &= ~0x0400;
+				}
+				break;
+
 			// GPU
 			case 0x1F801810:
 				psx_gpu_write_gp0(&(psx->gpu), H, state, timestamp, val);
@@ -168,6 +186,12 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 			case 0x1F80104C: // ----
 			case 0x1F80104E: // Pad Baud
 				return 0x00880000;
+
+			// Interrupts
+			case 0x1F801070: // I_STAT
+				return psx->i_stat;
+			case 0x1F801074: // I_MASK
+				return psx->i_mask;
 
 			// DMA
 			case 0x1F8010A8: // D2

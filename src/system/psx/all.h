@@ -54,6 +54,7 @@ struct PSX
 	struct GPU gpu;
 	//struct SPU spu;
 	struct PSXJoy joy[2];
+	uint16_t i_stat, i_mask;
 } __attribute__((__packed__));
 
 struct PSXGlobal

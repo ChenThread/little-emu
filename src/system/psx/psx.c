@@ -151,11 +151,17 @@ void psx_run(struct PSXGlobal *G, struct PSX *psx, uint64_t timestamp)
 
 	//uint64_t dt = timestamp - psx->H.timestamp;
 	while(TIME_IN_ORDER(psx->mips.H.timestamp_end, timestamp)) {
+		if((psx->i_mask & psx->i_stat) != 0) {
+			psx->mips.cop0reg[0x0D] |= 0x0400;
+		} else {
+			psx->mips.cop0reg[0x0D] &= ~0x0400;
+		}
 		psx->mips.H.timestamp_end = timestamp;
 		psx_mips_run(&(psx->mips), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 		psx_gpu_run(&(psx->gpu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 		//psx_spu_run(&(psx->spu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 	}
+	psx->i_stat |= (1<<0); // VBLANK
 
 	psx->H.timestamp = timestamp;
 }

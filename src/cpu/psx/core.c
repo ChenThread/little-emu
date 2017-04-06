@@ -288,6 +288,14 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		}
 
 		// Check for IRQ
+		if((mips->cop0reg[0x0C] & mips->cop0reg[0x0D] & 0xFF00) != 0
+			&& (mips->cop0reg[0x0C]&(1<<0)) != 0
+		) {
+			//printf("IRQ\n");
+			mips->cop0reg[0x0D] |= 0x0400;
+			MIPSNAME(fault_set)(mips, MIPS_STATE_ARGS, CAUSE_Int);
+			continue;
+		}
 		// TODO!
 
 		lstamp = mips->H.timestamp;
@@ -300,12 +308,12 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		if(mips->is_in_bios) {
 			if((mips->pc&0x1FFFFFFF) == 0x00030000) {
 				printf("JUMP TO PROGRAM\n");
-				psx_plant_exe(MIPS_STATE_ARGS);
 				//mips->pc = mips->exe_init_pc;
 				// Activate UART
 				mips->pc = 0xC0;
 				mips->gpr[GPR_T1] = 0x1B;
 				mips->gpr[GPR_A0] = 1;
+				psx_plant_exe(MIPS_STATE_ARGS);
 				mips->gpr[GPR_RA] = mips->exe_init_pc;
 				//mips->gpr[GPR_RA] = mips->pc;
 				mips->pc_diff1 = 4;
@@ -319,7 +327,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		mips->op_pc = mips->pc;
 		mips->op = MIPSNAME(fetch_op_x)(mips, MIPS_STATE_ARGS);
 		if(mips->fault_fired) {
-			printf("FIX YOUR SHIT %08X\n", mips->pc);
+			printf("FIX YOUR SHIT %08X\n", mips->op_pc);
 			continue;
 		}
 
