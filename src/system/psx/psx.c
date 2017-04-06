@@ -24,13 +24,17 @@ const char lemu_core_name[] = "Sony PlayStation ("
 #define PSX_BIOS_FILE "sysroms/scph5502.bin"
 #endif
 
-#if 1
+#if 0
 // I love this hack. --GM
-extern const uint32_t psx_bios_data[512<<8];
+// Disabled because clang now crashes. --GM
+uint32_t psx_bios_data[512<<8];
+extern const uint32_t psx_bios_data_src[512<<8];
 //extern const uint32_t psx_bios_data[];
 asm (
-	".global psx_bios_data\n"
-	"psx_bios_data: .incbin \"" PSX_BIOS_FILE "\"\n"
+	".data\n"
+	".global psx_bios_data_src\n"
+	"psx_bios_data_src: .incbin \"" PSX_BIOS_FILE "\"\n"
+	".text\n"
 );
 #else
 uint32_t psx_bios_data[512<<8];
@@ -50,17 +54,8 @@ const char *lemu_core_inputs_player[17] = {
 struct PSXGlobal psx_glob;
 void (*psx_hook_poll_input)(struct PSXGlobal *G, struct PSX *psx, int controller, uint64_t timestamp) = NULL;
 
-void psx_init(struct PSXGlobal *G, struct PSX *psx)
+void psx_plant_exe(struct PSXGlobal *G, struct PSX *psx)
 {
-	*psx = (struct PSX){ .H={.timestamp = 0,}, };
-	psx->joy[0].buttons = 0xFFFF;
-	psx->joy[1].buttons = 0xFFFF;
-	psx_mips_init(&(G->H), &(psx->mips));
-	psx_gpu_init(&(G->H), &(psx->gpu));
-	//psx_spu_init(&(G->H), &(psx->spu));
-	//psx->mips.H.timestamp = 1;
-	//psx->gpu.H.timestamp = 0;
-
 	uint32_t init_pc = *(uint32_t *)(G->rom+0x010);
 	uint32_t init_gp = *(uint32_t *)(G->rom+0x014);
 	uint32_t dest_beg = *(uint32_t *)(G->rom+0x018);
@@ -78,10 +73,68 @@ void psx_init(struct PSXGlobal *G, struct PSX *psx)
 	memcpy(((uint8_t *)(psx->ram))+dest_beg, G->rom+0x800, fsize);
 	(void)init_sp;
 	(void)init_gp;
-#if 1
+	//
+	// HLE EXE load
+	//
+	psx->mips.exe_init_pc = init_pc;
+	psx->mips.exe_init_gp = init_gp;
+	psx->mips.exe_init_sp = init_sp;
+	psx->mips.is_in_bios = false;
 	psx->mips.pc = init_pc;
 	psx->mips.gpr[GPR_GP] = init_gp;
 	psx->mips.gpr[GPR_SP] = init_sp;
+}
+
+void psx_init(struct PSXGlobal *G, struct PSX *psx)
+{
+	*psx = (struct PSX){ .H={.timestamp = 0,}, };
+	psx->joy[0].buttons = 0xFFFF;
+	psx->joy[1].buttons = 0xFFFF;
+	psx_mips_init(&(G->H), &(psx->mips));
+	psx_gpu_init(&(G->H), &(psx->gpu));
+	psx->mips.is_in_bios = true;
+	//psx_spu_init(&(G->H), &(psx->spu));
+	//psx->mips.H.timestamp = 1;
+	//psx->gpu.H.timestamp = 0;
+
+	if(psx_bios_data[0] == 0) {
+		FILE *fp = fopen(PSX_BIOS_FILE, "rb");
+		assert(fp != NULL);
+		fread(psx_bios_data, 1, sizeof(psx_bios_data), fp);
+		fclose(fp);
+		//memcpy(psx_bios_data, psx_bios_data_src, sizeof(psx_bios_data));
+
+#if 1
+		// HACK: Force-enable the UART
+		// (only tested on SCPH-5502 BIOS - may break on SCPH-5501!)
+		// This is basically nocash's patch.
+		// Sorry for the backwards endianness, it's binutils's fault.
+		// 6f04:       9806f00f        jal     0xfc01a60
+		// 6f08:       0e000424        li      a0,14
+		// 6f0c:       01a0013c        lui     at,0xa001
+		// 6f10:       e119f00f        jal     0xfc06784
+		// 6f14:       b0b920ac        sw      zero,-18000(at)
+
+		if(true
+			&& psx_bios_data[0x6F0C>>2] == 0x3C01A001
+			&& psx_bios_data[0x6F10>>2] == 0x0FF019E1
+			&& psx_bios_data[0x6F14>>2] == 0xAC20B9B0
+			)
+		{
+			psx_bios_data[0x6F08>>2] |= 0x10;
+			psx_bios_data[0x6F0C>>2] = 0x34010001;
+			psx_bios_data[0x6F10>>2] = 0x0FF019E1;
+			psx_bios_data[0x6F14>>2] = 0xAFA1A9C0;
+			printf("UART BIOS patch applied! (PAL ver 1)\n");
+
+		} else {
+			printf("Cannot apply UART BIOS patch.\n");
+		}
+#endif
+	}
+
+#if 0
+	psx_plant_exe(G, psx);
 #endif
 }
 

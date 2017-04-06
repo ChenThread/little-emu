@@ -9,7 +9,7 @@
 
 void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause);
 
-extern const uint32_t psx_bios_data[512<<8];
+extern uint32_t psx_bios_data[512<<8];
 
 // TODO emulate this as a separate device
 static void pad_update(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t val)
@@ -104,6 +104,22 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 				psx_gpu_write_gp1(&(psx->gpu), H, state, timestamp, val);
 				break;
 
+			// SPU
+			case 0x1F801DAA: // Control
+			case 0x1F801DA8: // Data write
+				// TODO!
+				break;
+
+			// EXP2
+			case 0x1F802023: // THRA
+				putchar(((val&latch)>>(8*3)));
+				break;
+
+			case 0x1F802041: { // 7-seg LED
+				int dig = (val&latch&0xFF00)>>8;
+				printf("7seg: %02X %08X\n", dig, psx->mips.op_pc);
+			} break;
+
 			// Unhandled
 			default:
 				printf("W %08X %08X %08X\n", latch, addr, val);
@@ -131,7 +147,7 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 		return psx->scratch[(addr&0x3FC)>>2];
 	} else if(addr >= 0x1FC00000) {
 		MIPS_ADD_CYCLES(&(psx->mips), 6);
-		return psx_bios_data[(addr&0x1FFFFC)>>2];
+		return psx_bios_data[(addr&0x07FFFC)>>2];
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
 		// I/O
 		switch(addr) {
@@ -153,11 +169,27 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 			case 0x1F80104E: // Pad Baud
 				return 0x00880000;
 
+			// DMA
+			case 0x1F8010A8: // D2
+			case 0x1F8010E8: // D6
+				// TODO!
+				return 0x00000000;
+
 			// GPU
 			case 0x1F801810:
 				return psx_gpu_read_gp0(&(psx->gpu), H, state, timestamp);
 			case 0x1F801814:
 				return psx_gpu_read_gp1(&(psx->gpu), H, state, timestamp);
+
+			// SPU
+			case 0x1F801DAA: // Control
+				return 0x00000000; // TODO!
+			case 0x1F801DAE: // Status
+				return 0x00000000; // TODO!
+
+			// EXP2
+			case 0x1F802021: // SRA
+				return 0x04<<(8*1); // TODO!
 
 			// Unhandled
 			default:
@@ -165,8 +197,11 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 				//return 0x00000000;
 				return 0xFFFFFFFF;
 		}
-	} else if((addr&0xFFFF0000) == 0x1FA00000) {
+	} else if((addr&0xFF800000) == 0x1F000000) {
 		// EXP1 - TODO memcontrol region
+		return 0xFFFFFFFF;
+	} else if((addr&0xFFE00000) == 0x1FA00000) {
+		// EXP3 - TODO memcontrol region
 		return 0xFFFFFFFF;
 	} else {
 		printf("R TRAP %08X %08X\n", latch, addr);

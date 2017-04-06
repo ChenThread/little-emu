@@ -57,6 +57,7 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+12));
 		printf("    - %08X %08X\n", mips->op_pc+16,
 			MIPSNAME(mem_read32_direct)(mips, MIPS_STATE_ARGS, mips->op_pc+16));
+		printf("    * %08X %08X\n", mips->gpr[GPR_A0], mips->gpr[GPR_A1]);
 		cause = CAUSE_Sys;
 #endif
 	}
@@ -89,9 +90,27 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause)
 	//printf("NEW PC: %08X\n", mips->pc);
 }
 
-static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
+static uint32_t MIPSNAME(mem_read32_code_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
 {
 	// TODO cache stuff
+
+	uint32_t v = MIPSNAME(mem_read)(MIPS_STATE_ARGS,
+		mips->H.timestamp,
+		addr & 0x1FFFFFFF,
+		0xFFFFFFFF);
+
+	return v;
+}
+
+static uint32_t MIPSNAME(mem_read32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr)
+{
+	// Ignore if cache isolated
+	// TODO: actually emulate cache
+	if((mips->cop0reg[0x0C] & 0x00010000) != 0) {
+		//printf("Cache isolated R: %08X\n", addr);
+		return 0x00000000;
+	}
+
 	// TODO add a latch to this
 	if(addr == 0xFFFE0130) {
 		// TODO!
@@ -160,7 +179,13 @@ static uint32_t MIPSNAME(mem_read8)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32
 
 static void MIPSNAME(mem_write32_direct)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t addr, uint32_t latch, uint32_t val)
 {
-	// TODO cache stuff
+	// Ignore if cache isolated
+	// TODO: actually emulate cache
+	if((mips->cop0reg[0x0C] & 0x00010000) != 0) {
+		//printf("Cache isolated W: %08X %08X %08X\n", addr, latch, val);
+		return;
+	}
+
 	if(addr == 0xFFFE0130) {
 		// TODO!
 		printf("INTERN1 W %08X\n", val);
@@ -228,10 +253,7 @@ static void MIPSNAME(mem_write8)(struct MIPS *mips, MIPS_STATE_PARAMS, uint32_t 
 static uint32_t MIPSNAME(fetch_op_x)(struct MIPS *mips, MIPS_STATE_PARAMS)
 {
 	// TODO cache stuff
-	uint32_t op = MIPSNAME(mem_read)(MIPS_STATE_ARGS,
-		mips->H.timestamp,
-		mips->pc & 0x1FFFFFFF,
-		0xFFFFFFFF);
+	uint32_t op = MIPSNAME(mem_read32_code_direct)(mips, MIPS_STATE_ARGS, mips->pc);
 
 	//printf("\n****\n%08X %08X %08X\n", mips->pc, mips->pc_diff1, mips->pc + mips->pc_diff1);
 	mips->pc += mips->pc_diff1;
@@ -239,6 +261,8 @@ static uint32_t MIPSNAME(fetch_op_x)(struct MIPS *mips, MIPS_STATE_PARAMS)
 	MIPS_ADD_CYCLES(mips, 1);
 	return op;
 }
+
+void psx_plant_exe(MIPS_STATE_PARAMS);
 
 void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 {
@@ -269,33 +293,24 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 		lstamp = mips->H.timestamp;
 
 		//
-		// HLE. THIS IS CANCER. FIXME THIS IS CANCER HLE IS CANCER FIX THIS CANCER DO IT RIGHT INSTEAD OF HLE-ING IT
+		// Reduced the amount of HLE required.
+		// printf now uses the debug DUART w/ suitable BIOS patch injected.
 		//
 #if 1
-		if((mips->pc&0x1FFFFFFF) == 0xA0) {
-			switch(mips->gpr[9]&0xFFFF) {
-				case 0x3E: // puts(fmt, ...)
-					MIPSNAME(puts)(mips, MIPS_STATE_ARGS);
-					break;
-				case 0x3F: // printf(fmt, ...)
-					MIPSNAME(printf)(mips, MIPS_STATE_ARGS);
-					break;
-				case 0x44: // FlushCache()
-					break;
-				default:
-					printf("HLE: A0 %08X\n", mips->gpr[9]);
-					abort();
-					break;
+		if(mips->is_in_bios) {
+			if((mips->pc&0x1FFFFFFF) == 0x00030000) {
+				printf("JUMP TO PROGRAM\n");
+				psx_plant_exe(MIPS_STATE_ARGS);
+				//mips->pc = mips->exe_init_pc;
+				// Activate UART
+				mips->pc = 0xC0;
+				mips->gpr[GPR_T1] = 0x1B;
+				mips->gpr[GPR_A0] = 1;
+				mips->gpr[GPR_RA] = mips->exe_init_pc;
+				//mips->gpr[GPR_RA] = mips->pc;
+				mips->pc_diff1 = 4;
+				continue;
 			}
-			mips->pc = mips->gpr[31];
-			mips->pc_diff1 = 4;
-			continue;
-		} else if((mips->pc&0x1FFFFFFF) == 0xB0) {
-			printf("HLE: B0 %08X\n", mips->gpr[9]);
-			abort();
-		} else if((mips->pc&0x1FFFFFFF) == 0xC0) {
-			printf("HLE: C0 %08X\n", mips->gpr[9]);
-			abort();
 		}
 #endif
 
@@ -632,6 +647,7 @@ void MIPSNAME(run)(struct MIPS *mips, MIPS_STATE_PARAMS, uint64_t timestamp)
 				} break;
 
 			case 0x04: // MTC
+				//printf("MTC0, W %02X %08X\n", rd, mips->gpr[rt]);
 				switch(rd) {
 
 					case 0x03: // BPC

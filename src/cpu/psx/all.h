@@ -65,5 +65,10 @@ struct MIPS
 	uint8_t was_branch;
 	uint8_t halted;
 	uint8_t fault_fired;
+
+	bool is_in_bios;
+	uint32_t exe_init_pc;
+	uint32_t exe_init_gp;
+	uint32_t exe_init_sp;
 } __attribute__((__packed__));
 
