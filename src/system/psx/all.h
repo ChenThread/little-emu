@@ -45,6 +45,14 @@ struct PSXJoy
 	// (this requires a lot of tracking)
 } __attribute__((__packed__));
 
+struct PSXTimer
+{
+	struct EmuState H;
+	uint32_t counter;
+	uint32_t mode;
+	uint32_t target;
+};
+
 struct PSX
 {
 	struct EmuState H;
@@ -54,6 +62,7 @@ struct PSX
 	struct GPU gpu;
 	//struct SPU spu;
 	struct PSXJoy joy[2];
+	struct PSXTimer timer[3];
 	uint16_t i_stat, i_mask;
 } __attribute__((__packed__));
 

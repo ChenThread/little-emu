@@ -143,6 +143,9 @@ void psx_copy(struct PSX *dest, struct PSX *src)
 	memcpy(dest, src, sizeof(struct PSX));
 }
 
+void psx_timer_run(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, int idx);
+void psx_timer_predict_irq(struct EmuGlobal *H, struct EmuState *state, int idx);
+
 void psx_run(struct PSXGlobal *G, struct PSX *psx, uint64_t timestamp)
 {
 	if(!TIME_IN_ORDER(psx->H.timestamp, timestamp)) {
@@ -158,6 +161,12 @@ void psx_run(struct PSXGlobal *G, struct PSX *psx, uint64_t timestamp)
 		}
 		psx->mips.H.timestamp_end = timestamp;
 		psx_mips_run(&(psx->mips), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
+		psx_timer_run(&(G->H), &(psx->H), psx->mips.H.timestamp_end, 0);
+		psx_timer_run(&(G->H), &(psx->H), psx->mips.H.timestamp_end, 1);
+		psx_timer_run(&(G->H), &(psx->H), psx->mips.H.timestamp_end, 2);
+		psx_timer_predict_irq(&(G->H), &(psx->H), 0);
+		psx_timer_predict_irq(&(G->H), &(psx->H), 1);
+		psx_timer_predict_irq(&(G->H), &(psx->H), 2);
 		psx_gpu_run(&(psx->gpu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 		//psx_spu_run(&(psx->spu), &(G->H), &(psx->H), psx->mips.H.timestamp_end);
 	}
