@@ -11,188 +11,6 @@ void MIPSNAME(fault_set)(struct MIPS *mips, MIPS_STATE_PARAMS, int cause);
 
 extern uint32_t psx_bios_data[512<<8];
 
-// TODO put the timer stuff into its own file
-void psx_timer_predict_irq(struct EmuGlobal *H, struct EmuState *state, int idx)
-{
-	assert(idx >= 0 && idx < 3);
-	struct PSX *psx = (struct PSX *)state;
-	struct PSXTimer *timer = &psx->timer[idx];
-
-	if((timer->mode & 0x0030) == 0) {
-		//printf("noirq %d\n", idx);
-		return; // No IRQ set
-	}
-
-	const uint64_t timestep = 11;
-
-	// Work out steps to each marker
-	uint32_t steps_targ = (timer->target&0xFFFF) - (timer->counter&0xFFFF);
-	uint32_t steps_FFFF = (0xFFFF) - (timer->counter&0xFFFF);
-
-	if((timer->mode & 0x0010) == 0x0010) {
-		uint64_t ts = timer->H.timestamp + timestep*steps_targ;
-		if(TIME_IN_ORDER(ts, psx->mips.H.timestamp_end)) {
-			//printf("steps add %04X target %04X\n", steps_targ, timer->target);
-			psx->mips.H.timestamp_end = ts;
-		}
-	}
-
-	if((timer->mode & 0x0020) == 0x0020) {
-		//if(timer->target == 0xFFFF || (timer->mode & 0x0028) == 0x0020) {
-		{
-			uint64_t ts = timer->H.timestamp + timestep*steps_FFFF;
-			if(TIME_IN_ORDER(ts, psx->mips.H.timestamp_end)) {
-				//printf("steps add %04X 0xFFFF\n", steps_FFFF);
-				psx->mips.H.timestamp_end = ts;
-			}
-			//timer->H.timestamp +
-		}
-	}
-
-	//psx->mips.H.timestamp_end
-}
-
-void psx_timer_run(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, int idx)
-{
-	assert(idx >= 0 && idx < 3);
-	struct PSX *psx = (struct PSX *)state;
-	struct PSXTimer *timer = &psx->timer[idx];
-
-	if(!TIME_IN_ORDER(timer->H.timestamp, timestamp)) {
-		return;
-	}
-
-	// TODO: a lot of things.
-	// TODO: reset on target mode
-
-	timer->H.timestamp_end = timestamp;
-	uint64_t timedelta = (timer->H.timestamp_end - timer->H.timestamp);
-	const uint64_t timestep = 11;
-	timedelta /= timestep;
-
-	// Work out steps to each marker
-	uint32_t steps_targ = (timer->target&0xFFFF) - (timer->counter&0xFFFF);
-	uint32_t steps_FFFF = (0xFFFF) - (timer->counter&0xFFFF);
-
-	if(steps_targ >= timedelta) {
-		timer->mode |= 0x0800;
-	}
-	if(steps_FFFF >= timedelta) {
-		timer->mode |= 0x1000;
-	}
-
-	timer->mode |= 0x0400; // TODO get the right behaviour for this bit
-
-	timer->counter += timedelta;
-	timer->counter &= 0xFFFF;
-
-	//printf("Timer %d gap %016llX\n", idx, (unsigned long long)timedelta);
-
-	timer->H.timestamp += timedelta*timestep;
-}
-
-void psx_timers_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t val)
-{
-	struct PSX *psx = (struct PSX *)state;
-
-	int idx = ((addr>>4)&0xF);
-	assert(idx >= 0 && idx < 3);
-	switch(addr&0xC)
-	{
-		case 0x0: // Counter
-			psx_timer_run(H, state, timestamp, idx);
-			psx->timer[idx].counter = val & 0xFFFF;
-			psx_timer_predict_irq(H, state, idx);
-			break;
-		case 0x4: // Mode
-			psx_timer_run(H, state, timestamp, idx);
-			// TODO: handle this properly
-			psx->timer[idx].mode = val & 0xFFFF;
-			psx_timer_predict_irq(H, state, idx);
-			break;
-		case 0x8: // Target
-			psx_timer_run(H, state, timestamp, idx);
-			psx->timer[idx].target = val & 0xFFFF;
-			psx_timer_predict_irq(H, state, idx);
-			break;
-		case 0xC:
-		default:
-			// Unknown!
-			break;
-	}
-}
-
-uint32_t psx_timers_read(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr)
-{
-	struct PSX *psx = (struct PSX *)state;
-
-	int idx = ((addr>>4)&0xF);
-	assert(idx >= 0 && idx < 3);
-	switch(addr&0xC)
-	{
-		case 0x0: // Counter
-			psx_timer_run(H, state, timestamp, idx);
-			psx_timer_predict_irq(H, state, idx);
-			return psx->timer[idx].counter;
-		case 0x4: {
-			// Mode
-			psx_timer_run(H, state, timestamp, idx);
-			uint32_t mode = psx->timer[idx].mode & 0xFFFF;
-			psx->timer[idx].mode &= ~0x1800; // clear bits
-			psx_timer_predict_irq(H, state, idx);
-			//printf("MODE %d %04X\n", idx, mode);
-			return mode;
-		}
-		case 0x8: // Target
-			psx_timer_run(H, state, timestamp, idx);
-			psx_timer_predict_irq(H, state, idx);
-			return psx->timer[idx].target;
-		case 0xC:
-		default:
-			// Unknown!
-			return 0;
-	}
-}
-
-// TODO emulate this as a separate device
-void psx_pad_update(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t val)
-{
-	struct PSX *psx = (struct PSX *)state;
-	val &= 0xFF;
-
-	psx->joy[0].val <<= 8;
-	psx->joy[0].val &= ~0xFF;
-	uint32_t rval = 0xFF;
-	switch(psx->joy[0].mode) {
-		case PSX_JOY_MODE_UNENGAGED:
-			break;
-		case PSX_JOY_MODE_WAITING:
-			if(val == 0x01) {
-				psx->joy[0].mode = PSX_JOY_MODE_PAD_CMD;
-			} else {
-				psx->joy[0].mode = PSX_JOY_MODE_UNENGAGED;
-			}
-			break;
-		case PSX_JOY_MODE_PAD_CMD:
-			rval = 0x41;
-			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_0;
-			break;
-		case PSX_JOY_MODE_BUTTON_0:
-			rval = 0x5A;
-			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_1;
-			break;
-		case PSX_JOY_MODE_BUTTON_1:
-			rval = (uint8_t)(psx->joy[0].buttons);
-			psx->joy[0].mode = PSX_JOY_MODE_BUTTON_2;
-			break;
-		case PSX_JOY_MODE_BUTTON_2:
-			rval = (uint8_t)(psx->joy[0].buttons>>8);
-			psx->joy[0].mode = PSX_JOY_MODE_UNENGAGED;
-			break;
-	}
-
-	psx->joy[0].val |= (rval & 0xFF);
-}
 
 void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timestamp, uint32_t addr, uint32_t latch, uint32_t val)
 {
@@ -212,6 +30,11 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 		uint32_t *v = &(psx->scratch[(addr&0x3FC)>>2]);
 		*v = (*v & ~latch) | (val & latch);
 
+	} else if((addr&0xFFFFFF80) == 0x1F801080) {
+		// DMA
+		printf("W DMA %08X %08X\n", addr, val);
+		psx_dma_write(H, state, timestamp, addr, val);
+
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
 		// I/O
 		switch(addr) {
@@ -219,7 +42,7 @@ void psx_mips_mem_write(struct EmuGlobal *H, struct EmuState *state, uint64_t ti
 			// Pad
 			case 0x1F801040: // Pad TX
 				//printf("Pad TX %08X\n", val);
-				psx_pad_update(H, state, timestamp, val);
+				psx_joy_update(H, state, timestamp, val);
 				break;
 			case 0x1F801048: // Pad Mode
 			case 0x1F80104A: // Pad Ctrl
@@ -322,6 +145,11 @@ uint32_t psx_mips_mem_read(struct EmuGlobal *H, struct EmuState *state, uint64_t
 	} else if(addr >= 0x1FC00000) {
 		MIPS_ADD_CYCLES(&(psx->mips), 6);
 		return psx_bios_data[(addr&0x07FFFC)>>2];
+	} else if((addr&0xFFFFFF80) == 0x1F801080) {
+		// DMA
+		uint32_t val = psx_dma_read(H, state, timestamp, addr);
+		printf("R DMA %08X %08X\n", addr, val);
+		return val;
 	} else if((addr&0xFFFF0000) == 0x1F800000) {
 		// I/O
 		switch(addr) {

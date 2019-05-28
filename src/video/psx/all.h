@@ -35,6 +35,12 @@ struct GPU
 		PSX_GPU_XFER_FROM_GPU,
 		PSX_GPU_XFER_TO_GPU,
 	} xfer_mode;
+	enum {
+		PSX_GPU_DMA_OFF = 0,
+		PSX_GPU_DMA_FIFO,
+		PSX_GPU_DMA_CPU_TO_GP0,
+		PSX_GPU_DMA_GPUREAD_TO_CPU,
+	} xfer_dma;
 	uint32_t xfer_addr;
 	uint32_t xfer_width;
 	uint32_t xfer_stride;

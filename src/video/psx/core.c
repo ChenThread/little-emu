@@ -6,6 +6,7 @@ void GPUNAME(init)(struct EmuGlobal *G, struct GPU *gpu)
 	gpu->cmd_count = 0;
 
 	gpu->xfer_mode = PSX_GPU_XFER_NONE;
+	gpu->xfer_dma = PSX_GPU_DMA_OFF;
 
 	gpu->screen_x0 = 0x200;
 	gpu->screen_y0 = 0x010;
@@ -142,10 +143,12 @@ uint32_t GPUNAME(read_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState
 	switch(gpu->xfer_mode) {
 		case PSX_GPU_XFER_NONE:
 		case PSX_GPU_XFER_TO_GPU:
+			printf("!!! GPU Read in wrong mode!\n");
 			break;
 
 		case PSX_GPU_XFER_FROM_GPU: {
 			uint32_t val = gpu->vram.w[(gpu->xfer_addr & (1024*512-1))>>1];
+			//printf("... GPU Read %08X: %08X\n", gpu->xfer_addr, val);
 			gpu->xfer_addr += 2;
 			gpu->xfer_xrem -= 2;
 			if(gpu->xfer_xrem == 0) {
@@ -210,6 +213,7 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 			break;
 
 		case PSX_GPU_XFER_TO_GPU:
+			//printf("... GPU Write %08X: %08X\n", gpu->xfer_addr, val);
 			gpu->vram.w[(gpu->xfer_addr & (1024*512-1))>>1] = val;
 			gpu->xfer_addr += 2;
 			gpu->xfer_xrem -= 2;
@@ -381,9 +385,14 @@ void GPUNAME(write_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 			break;
 
 		case 0x04: // DMA mode
-			// TODO: actually set DMA mode properly
-			// (instead of just cancelling a transfer)
-			gpu->xfer_mode = PSX_GPU_XFER_NONE;
+			printf("... DMA mode %08X\n", val);
+			gpu->xfer_dma = (val & 0x3);
+			// TODO: don't cancel transfers
+#if 0
+			if(gpu->xfer_dma == PSX_GPU_DMA_OFF || gpu->xfer_dma == PSX_GPU_DMA_FIFO) {
+				gpu->xfer_mode = PSX_GPU_XFER_NONE;
+			}
+#endif
 			break;
 
 		case 0x05: // Display source address in halfwords
