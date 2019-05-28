@@ -176,8 +176,18 @@ uint32_t GPUNAME(read_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState
 uint32_t GPUNAME(read_gp1)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *state, uint64_t timestamp)
 {
 	GPUNAME(run)(gpu, G, state, timestamp);
-	uint32_t ret = gpu->status;
-	ret |= 0xFFFFFFFF; // TODO!
+
+	//uint32_t ret = gpu->status;
+	uint32_t ret = 0;
+
+	// TODO: work out when these flags should be set
+	ret |= (1<<25);
+	ret |= (1<<26);
+	ret |= (1<<27);
+	ret |= (1<<28);
+
+	ret |= ((gpu->xfer_dma & 0x3)<<29);
+
 	//printf("GP1 R -> %08X\n", ret);
 	return ret;
 }
@@ -209,8 +219,6 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 				}
 			}
 			return;
-			//assert(!"TODO!");
-			break;
 
 		case PSX_GPU_XFER_TO_GPU:
 			//printf("... GPU Write %08X: %08X\n", gpu->xfer_addr, val);
@@ -318,59 +326,63 @@ void GPUNAME(write_gp0)(struct GPU *gpu, struct EmuGlobal *G, struct EmuState *s
 			GPU_DROP_N_COMMANDS(1);
 		} break;
 
-		//
-		// TRANSFERS
-		//
-		case 0xA0: // Upload rect
-		case 0xC0: // Download rect
-		{
-			if(gpu->cmd_count < 3) { return; }
-			switch(cmd) {
-				case 0xA0:
-					printf("GP0 - Upload rect %08X %08X\n", c[1], c[2]);
-					gpu->xfer_mode = PSX_GPU_XFER_TO_GPU;
-					break;
-				case 0xC0:
-					printf("GP0 - Download rect %08X %08X\n", c[1], c[2]);
-					gpu->xfer_mode = PSX_GPU_XFER_FROM_GPU;
-					break;
-
-				default:
-					assert(!"UNREACHABLE");
-					break;
-			}
-			uint32_t mx = (uint32_t)(uint16_t)(c[1]);
-			uint32_t my = (uint32_t)(uint16_t)(c[1]>>16);
-			uint32_t mw = (uint32_t)(uint16_t)(c[2]);
-			uint32_t mh = (uint32_t)(uint16_t)(c[2]>>16);
-
-			// TODO: properly handle odd X/W values!
-			mx &= 1;
-			mw = (mw+1)&~1;
-			assert((mx&1) == 0);
-			assert((mw&1) == 0);
-
-			mx &= 1024-1;
-			my &= 512-1;
-			mw -= 1;
-			mh -= 1;
-			mw &= 1024-1;
-			mh &= 512-1;
-			mw += 1;
-			mh += 1;
-
-			gpu->xfer_addr = mx + (my<<10);
-			gpu->xfer_width = mw;
-			gpu->xfer_stride = 1024-mw;
-			gpu->xfer_xrem = mw;
-			gpu->xfer_yrem = mh;
-			GPU_DROP_N_COMMANDS(3);
-		} break;
-
 		default:
-			printf("GP0 W %08X\n", val);
-			GPU_DROP_N_COMMANDS(1);
-			break;
+		switch(cmd&0xE0)
+		{
+			//
+			// TRANSFERS
+			//
+			case 0xA0: // Upload rect
+			case 0xC0: // Download rect
+			{
+				if(gpu->cmd_count < 3) { return; }
+				switch(cmd&0xE0) {
+					case 0xA0:
+						printf("GP0 - Upload rect %08X %08X\n", c[1], c[2]);
+						gpu->xfer_mode = PSX_GPU_XFER_TO_GPU;
+						break;
+					case 0xC0:
+						printf("GP0 - Download rect %08X %08X\n", c[1], c[2]);
+						gpu->xfer_mode = PSX_GPU_XFER_FROM_GPU;
+						break;
+
+					default:
+						assert(!"UNREACHABLE");
+						break;
+				}
+				uint32_t mx = (uint32_t)(uint16_t)(c[1]);
+				uint32_t my = (uint32_t)(uint16_t)(c[1]>>16);
+				uint32_t mw = (uint32_t)(uint16_t)(c[2]);
+				uint32_t mh = (uint32_t)(uint16_t)(c[2]>>16);
+
+				// TODO: properly handle odd X/W values!
+				mx &= 1;
+				mw = (mw+1)&~1;
+				assert((mx&1) == 0);
+				assert((mw&1) == 0);
+
+				mx &= 1024-1;
+				my &= 512-1;
+				mw -= 1;
+				mh -= 1;
+				mw &= 1024-1;
+				mh &= 512-1;
+				mw += 1;
+				mh += 1;
+
+				gpu->xfer_addr = mx + (my<<10);
+				gpu->xfer_width = mw;
+				gpu->xfer_stride = 1024-mw;
+				gpu->xfer_xrem = mw;
+				gpu->xfer_yrem = mh;
+				GPU_DROP_N_COMMANDS(3);
+			} break;
+
+			default:
+				printf("GP0 W %08X\n", val);
+				GPU_DROP_N_COMMANDS(1);
+				break;
+		} break;
 	}
 }
 

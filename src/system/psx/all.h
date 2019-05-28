@@ -65,6 +65,7 @@ struct PSXDMAChannel
 	bool running;
 	uint32_t xfer_addr;
 	uint32_t xfer_block_remain;
+	uint32_t xfer_tag; // for linked list mode
 };
 
 struct PSXDMA

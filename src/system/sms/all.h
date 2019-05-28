@@ -17,7 +17,7 @@
 #endif
 
 #ifndef USE_NTSC
-#define USE_NTSC 0
+#define USE_NTSC 1
 #endif
 
 #ifndef PSG_OUT_BUF_LEN

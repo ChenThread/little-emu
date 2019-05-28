@@ -73,6 +73,8 @@ void psx_plant_exe(struct PSXGlobal *G, struct PSX *psx)
 	memcpy(((uint8_t *)(psx->ram))+dest_beg, G->rom+0x800, fsize);
 	(void)init_sp;
 	(void)init_gp;
+
+#if 1
 	//
 	// HLE EXE load
 	//
@@ -83,6 +85,7 @@ void psx_plant_exe(struct PSXGlobal *G, struct PSX *psx)
 	psx->mips.pc = init_pc;
 	psx->mips.gpr[GPR_GP] = init_gp;
 	psx->mips.gpr[GPR_SP] = init_sp;
+#endif
 }
 
 void psx_init(struct PSXGlobal *G, struct PSX *psx)

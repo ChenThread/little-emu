@@ -5,6 +5,8 @@ void psx_dma_update_interrupts(struct EmuGlobal *H, struct EmuState *state, uint
 	struct PSX *psx = (struct PSX *)state;
 	struct PSXDMA *dma = &psx->dma;
 
+	bool int_was_set = ((dma->dicr & 0x80000000) != 0);
+
 	if((dma->dicr&0x00008000) != 0) {
 		// Force IRQ = 1
 		dma->dicr |= 0x80000000;
@@ -14,6 +16,14 @@ void psx_dma_update_interrupts(struct EmuGlobal *H, struct EmuState *state, uint
 	} else if((((dma->dicr>>16)&(dma->dicr>>24))&0x7F) != 0) {
 		// General IRQ enabled & IRQ set case
 		dma->dicr |= 0x80000000;
+	}
+
+	bool int_is_set = ((dma->dicr & 0x80000000) != 0);
+
+	printf("DMA interrupt update: %08X\n", dma->dicr);
+	if(int_is_set && !int_was_set) {
+		printf("Fire DMA interrupt\n");
+		psx->i_stat |= (1<<3); // DMA
 	}
 }
 
@@ -55,33 +65,100 @@ void psx_dma_run_channel(struct EmuGlobal *H, struct EmuState *state, uint64_t t
 	{
 		channel->running = true;
 		channel->xfer_addr = channel->d_madr;
+		channel->xfer_tag = channel->d_madr;
 		channel->xfer_block_remain = 0;
+		int sync_mode = (channel->d_chcr>>9)&0x3;
+		if(sync_mode == 0) {
+			channel->xfer_addr = channel->d_madr;
+			channel->xfer_block_remain = (channel->d_bcr&0xFFFF);
+			if(channel->xfer_block_remain == 0) {
+				channel->xfer_block_remain = 0x10000;
+			}
+		}
 	}
 
 	while(timedelta >= 1)
 	{
+		bool skip_dma_step = false;
+
 		if(channel->xfer_block_remain == 0)
 		{
 			int sync_mode = (channel->d_chcr>>9)&0x3;
-			assert(sync_mode == 1); // FIXME: we need to support the other two sync modes
-			channel->d_madr = channel->xfer_addr;
 
-			if((channel->d_bcr>>16) == 0) {
-				channel->running = false;
-				channel->d_chcr &= ~(1<<24);
+			switch(sync_mode)
+			{
+				case 0: {
+					// All-at-once mode
+					//channel->d_madr = channel->xfer_addr;
+					channel->running = false;
+					channel->d_chcr &= ~(1<<24);
+					dma->dicr |= 1<<(24+idx);
+					printf("DMA All-at-once done: %d\n", idx);
+					psx_dma_update_interrupts(H, state, timestamp);
 
-				// return, nothing left to transfer
-				channel->H.timestamp += timedelta*timestep;
-				return;
+					// return, nothing left to transfer
+					channel->H.timestamp += timedelta*timestep;
+					return;
+				} break;
 
-			} else {
-				channel->d_bcr -= 0x10000;
-				channel->xfer_addr = channel->d_madr;
-				channel->xfer_block_remain = (channel->d_bcr&0xFFFF);
-				if(channel->xfer_block_remain == 0) {
-					channel->xfer_block_remain = 0x10000;
-				}
+				case 1: {
+					// Block mode
+					channel->d_madr = channel->xfer_addr;
+					if((channel->d_bcr>>16) == 0) {
+						channel->running = false;
+						channel->d_chcr &= ~(1<<24);
+						dma->dicr |= 1<<(24+idx);
+						psx_dma_update_interrupts(H, state, timestamp);
+
+						// return, nothing left to transfer
+						channel->H.timestamp += timedelta*timestep;
+						return;
+
+					} else {
+						channel->d_bcr -= 0x10000;
+						channel->xfer_addr = channel->d_madr;
+						channel->xfer_block_remain = (channel->d_bcr&0xFFFF);
+						if(channel->xfer_block_remain == 0) {
+							channel->xfer_block_remain = 0x10000;
+						}
+					}
+				} break;
+
+				case 2: {
+					// Linked-list mode
+					assert((channel->d_bcr & (1<<1)) == 0); // Negative step not supported (yet?)
+					channel->d_madr = channel->xfer_tag&0x00FFFFFF;
+					channel->xfer_addr = channel->d_madr;
+					//printf("LL %08X\n", channel->xfer_addr);
+					if(channel->xfer_addr == 0x00FFFFFF) {
+						channel->running = false;
+						channel->d_chcr &= ~(1<<24);
+						dma->dicr |= 1<<(24+idx);
+						psx_dma_update_interrupts(H, state, timestamp);
+
+						// return, nothing left to transfer
+						channel->H.timestamp += timedelta*timestep;
+						return;
+					} else {
+						channel->xfer_tag = psx->ram[(channel->xfer_addr&(sizeof(psx->ram)-1))>>2];
+						channel->xfer_addr += 4;
+						channel->xfer_block_remain = (channel->xfer_tag>>8)&0x00;
+						skip_dma_step = true;
+					}
+				} break;
+
+				default:
+					printf("unsupported sync mode %d\n", sync_mode);
+					assert(!"unsupported sync mode");
+					break;
 			}
+		}
+
+		if(skip_dma_step)
+		{
+			timedelta -= 1;
+			channel->H.timestamp += timestep;
+			continue;
 		}
 
 		switch(idx)
@@ -92,23 +169,52 @@ void psx_dma_run_channel(struct EmuGlobal *H, struct EmuState *state, uint64_t t
 
 				//printf("GPU DMA on\n");
 
-				if((channel->d_chcr & (1<<1)) == 0) {
+				if((channel->d_chcr & (1<<0)) == 0) {
 					// To RAM
 					//assert(gpu->xfer_mode == PSX_GPU_XFER_FROM_GPU);
 					assert(gpu->xfer_dma == PSX_GPU_DMA_GPUREAD_TO_CPU);
 
 					uint32_t val = psx_gpu_read_gp0(gpu, H, state, channel->H.timestamp);
 					psx->ram[(channel->xfer_addr&(sizeof(psx->ram)-1))>>2] = val;
-					channel->xfer_addr += (1-(channel->d_chcr&0x2))<<4;
+					channel->xfer_addr += (1-(channel->d_chcr&0x2))<<2;
 					channel->xfer_block_remain -= 1;
 
 				} else {
 					// From RAM
-					assert(gpu->xfer_mode == PSX_GPU_XFER_TO_GPU);
-					assert(gpu->xfer_dma == PSX_GPU_DMA_CPU_TO_GP0);
-					assert(!"TODO: DMA from RAM");
+					if(gpu->xfer_mode == PSX_GPU_XFER_TO_GPU) {
+						assert(gpu->xfer_dma == PSX_GPU_DMA_CPU_TO_GP0);
+					} else {
+						assert(gpu->xfer_mode == PSX_GPU_XFER_NONE);
+						assert(gpu->xfer_dma == PSX_GPU_DMA_FIFO);
+					}
+					//assert(!"TODO: DMA2 from RAM");
+
+					uint32_t val = psx->ram[(channel->xfer_addr&(sizeof(psx->ram)-1))>>2];
+					printf("W DMA2 %08X %08X -> %08X\n", channel->xfer_addr, channel->xfer_block_remain, val);
+					psx_gpu_write_gp0(gpu, H, state, channel->H.timestamp, val);
+					channel->xfer_addr += (1-(channel->d_chcr&0x2))<<2;
+					channel->xfer_block_remain -= 1;
 				}
 			} break;
+
+			case 6: {
+				// OTC
+
+				if((channel->d_chcr & (1<<0)) == 0) {
+					// To RAM
+					uint32_t new_addr = channel->xfer_addr-4;
+					uint32_t val = (channel->xfer_block_remain == 1 ? 0x00FFFFFF : new_addr) & 0x00FFFFFF;
+					psx->ram[(channel->xfer_addr&(sizeof(psx->ram)-1))>>2] = val;
+					channel->xfer_addr -= 4;
+					channel->xfer_block_remain -= 1;
+
+				} else {
+					// From RAM
+					assert(!"DMA6 somehow ended up in From-RAM mode");
+				}
+			} break;
+
+
 			default: {
 				printf("!!! unhandled DMA channel %d\n", idx);
 				assert(!"unhandled DMA channel");
@@ -199,7 +305,7 @@ void psx_dma_write(struct EmuGlobal *H, struct EmuState *state, uint64_t timesta
 				dma->dpcr = val;
 				break;
 			case 0x74:
-				dma->dicr &=  ~0xBFFF803F;
+				dma->dicr &=  ~0x7FFF803F;
 				dma->dicr |=   0x00FF803F&val;
 				dma->dicr &= ~(0x7F000000&val);
 				psx_dma_update_interrupts(H, state, timestamp);
